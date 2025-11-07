@@ -10,7 +10,7 @@ const LOG_PATTERNS = [
         regex: /^([0-9T\:\.\-\+Z]+)\s+([\w\.\-]+)\s+([\w\.\-]+(?:\[\d+\])?):\s+(.*)$/,
         map: (parts: string[]): Partial<LogEntry> => ({
             timestamp: new Date(parts[1]),
-            level: 'Information',
+            level: inferLevelFromMessage(parts[4]),
             source: parts[3].replace(/\[\d+\]/, ''),
             message: parts[4]
         })
@@ -21,7 +21,7 @@ const LOG_PATTERNS = [
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})\s+(.*)$/,
         map: (parts: string[]): Partial<LogEntry> => ({
             timestamp: new Date(parts[1]),
-            level: 'Information',
+            level: inferLevelFromMessage(parts[2]),
             source: 'dpkg',
             message: parts[2]
         })
@@ -88,12 +88,27 @@ const LOG_PATTERNS = [
         regex: /^(.*)$/,
         map: (parts: string[]): Partial<LogEntry> => ({
             timestamp: new Date(), // Use current time as a fallback
-            level: 'Information',
+            level: inferLevelFromMessage(parts[1]),
             source: 'boot',
             message: parts[1]
         })
     }
 ];
+
+// Infer level from message content for logs that don't specify a level
+function inferLevelFromMessage(message: string): EventLevel {
+    const lowerMessage = message.toLowerCase();
+    if (lowerMessage.includes('emergency')) return 'Emergency';
+    if (lowerMessage.includes('alert')) return 'Alert';
+    if (lowerMessage.includes('critical') || lowerMessage.includes('crit')) return 'Critical';
+    if (lowerMessage.includes('error') || lowerMessage.includes('err') || lowerMessage.includes('fail') || lowerMessage.includes('failure')) return 'Error';
+    if (lowerMessage.includes('warning') || lowerMessage.includes('warn')) return 'Warning';
+    if (lowerMessage.includes('notice')) return 'Notice';
+    if (lowerMessage.includes('debug')) return 'Debug';
+    if (lowerMessage.includes('verbose')) return 'Verbose';
+    return 'Information';
+}
+
 
 // Maps syslog priority codes (severity part) to our EventLevel type
 function getLevelFromSyslogPriority(priority: number): EventLevel {
