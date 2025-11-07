@@ -40,8 +40,13 @@ const pseudoRandom = (seed: number) => {
     return x - Math.floor(x);
 };
 
+const DEBOUNCE_DELAY = 50; // ms
+
 export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelect }: EventTimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [interactiveZoom, setInteractiveZoom] = useState(1);
+  const debounceTimer = useRef<NodeJS.Timeout>();
+  
   const [isPanning, setIsPanning] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [horizontalJitter, setHorizontalJitter] = useState(20);
@@ -74,8 +79,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const { scrollLeft, clientWidth } = timelineRef.current;
     const timelineWidth = clientWidth * zoomLevel;
 
-    // Add a buffer to render items slightly outside the viewport
-    const buffer = clientWidth * 0.5; // 50% buffer on each side
+    const buffer = clientWidth * 0.5;
     const viewStart = scrollLeft - buffer;
     const viewEnd = scrollLeft + clientWidth + buffer;
 
@@ -91,7 +95,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 
   }, [entries, getPosition, zoomLevel]);
 
-  // Debounced update using requestAnimationFrame
   const requestUpdate = useCallback(() => {
     if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -99,7 +102,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     animationFrameRef.current = requestAnimationFrame(updateVisibleEntries);
   }, [updateVisibleEntries]);
 
-  // Update visible entries on scroll, zoom, or data change
   useEffect(() => {
     requestUpdate();
     
@@ -115,7 +117,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     }
   }, [requestUpdate, entries, zoomLevel]);
 
-
   const applyZoom = useCallback((newZoom: number, focusPointPercent: number) => {
     if (!timelineRef.current) return;
 
@@ -123,31 +124,39 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const oldZoom = zoomLevel;
     const oldScrollLeft = timeline.scrollLeft;
     const viewWidth = timeline.clientWidth;
-
+    
     const pointInTimeline = oldScrollLeft + viewWidth * focusPointPercent;
     const timePercent = pointInTimeline / (viewWidth * oldZoom);
     
     const newScrollLeft = timePercent * (viewWidth * newZoom) - viewWidth * focusPointPercent;
-    
+
     setZoomLevel(newZoom);
     
-    // Use requestAnimationFrame to prevent layout thrashing
     requestAnimationFrame(() => {
         if (timelineRef.current) {
             timelineRef.current.scrollLeft = newScrollLeft;
         }
     });
   }, [zoomLevel]);
+  
+  useEffect(() => {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = setTimeout(() => {
+          if (interactiveZoom !== zoomLevel) {
+              applyZoom(interactiveZoom, zoomFocusPoint);
+          }
+      }, DEBOUNCE_DELAY);
 
+      return () => clearTimeout(debounceTimer.current);
+  }, [interactiveZoom, zoomLevel, zoomFocusPoint, applyZoom]);
 
-  // Center on selected event
   useEffect(() => {
     if (selectedEvent && timelineRef.current && timeRange > 0) {
       const positionPercent = getPosition(selectedEvent.timestamp);
       
-      const newZoomLevel = Math.max(zoomLevel, 5); // Zoom in a bit if not already
+      const newZoomLevel = Math.max(zoomLevel, 5); 
       if (newZoomLevel !== zoomLevel) {
-        setZoomLevel(newZoomLevel);
+        setInteractiveZoom(newZoomLevel); 
       }
 
       requestAnimationFrame(() => {
@@ -170,14 +179,14 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             const rect = timelineRef.current.getBoundingClientRect();
             const focusPercent = (event.clientX - rect.left) / rect.width;
             setZoomFocusPoint(focusPercent);
-            applyZoom(newZoom, focusPercent);
+            setInteractiveZoom(newZoom); // Update interactive state
         }
     } else {
         if (timelineRef.current) {
             timelineRef.current.scrollLeft += event.deltaY;
         }
     }
-  }, [zoomLevel, applyZoom]);
+  }, [zoomLevel]);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (timelineRef.current) {
@@ -189,12 +198,10 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         setSelectionBox({ startX: event.clientX, endX: event.clientX });
         return;
     }
-    // If clicking on an icon, let the icon's handler take over
     if ((event.target as HTMLElement).closest('[data-event-id]')) {
       return;
     }
     
-    // Clear selection if clicking on background
     onEventSelect(null);
 
     setIsPanning(true);
@@ -209,7 +216,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         const startX = Math.min(selectionBox.startX, selectionBox.endX) - rect.left;
         const endX = Math.max(selectionBox.startX, selectionBox.endX) - rect.left;
 
-        if (Math.abs(endX - startX) > 10) { // minimum drag distance
+        if (Math.abs(endX - startX) > 10) { 
             const currentScrollLeft = timelineRef.current.scrollLeft;
             const totalWidth = rect.width * zoomLevel;
 
@@ -219,7 +226,8 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             const newZoom = Math.min(100, zoomLevel * (1 / (endPercent - startPercent)));
             const focus = startPercent + (endPercent - startPercent) / 2;
 
-            applyZoom(newZoom, focus);
+            setInteractiveZoom(newZoom);
+            setZoomFocusPoint(focus);
         }
     }
     
@@ -228,7 +236,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
      if(timelineRef.current) {
         timelineRef.current.style.cursor = 'grab';
     }
-  }, [selectionBox, zoomLevel, applyZoom]);
+  }, [selectionBox, zoomLevel]);
 
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (selectionBox) {
@@ -253,8 +261,13 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const rect = timelineRef.current.getBoundingClientRect();
     const focusPercent = (event.clientX - rect.left) / rect.width;
     setZoomFocusPoint(focusPercent);
-    applyZoom(newZoom, focusPercent);
-  }, [zoomLevel, applyZoom]);
+    setInteractiveZoom(newZoom);
+  }, [zoomLevel]);
+  
+  const handleResetZoom = () => {
+    setZoomFocusPoint(0.5);
+    setInteractiveZoom(1);
+  };
 
   if (allEntries.length === 0) {
     return (
@@ -281,8 +294,8 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
               <ZoomOut className="w-4 h-4 text-muted-foreground" />
               <Slider
                   aria-label="Zoom level"
-                  value={[zoomLevel]}
-                  onValueChange={(value) => applyZoom(value[0], zoomFocusPoint)}
+                  value={[interactiveZoom]}
+                  onValueChange={(value) => setInteractiveZoom(value[0])}
                   min={1}
                   max={100}
                   step={1}
@@ -290,7 +303,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
               />
               <ZoomIn className="w-4 h-4 text-muted-foreground" />
             </div>
-            <Button variant="outline" size="sm" onClick={() => applyZoom(1, 0.5)}><Search className="w-4 h-4 mr-0 md:mr-2" /><span className="hidden md:inline">Reset</span></Button>
+            <Button variant="outline" size="sm" onClick={handleResetZoom}><Search className="w-4 h-4 mr-0 md:mr-2" /><span className="hidden md:inline">Reset</span></Button>
             <Popover>
                 <PopoverTrigger asChild>
                     <Button variant="outline" size="icon"><SlidersHorizontal className="w-4 h-4" /></Button>
