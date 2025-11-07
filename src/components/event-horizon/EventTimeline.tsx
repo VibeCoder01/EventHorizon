@@ -41,6 +41,7 @@ const pseudoRandom = (seed: number) => {
 
 export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelect }: EventTimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [interactiveZoom, setInteractiveZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [horizontalJitter, setHorizontalJitter] = useState(20);
@@ -48,6 +49,10 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const [zoomFocusPoint, setZoomFocusPoint] = useState(0.5); // 0.5 is the center
   const [visibleEntries, setVisibleEntries] = useState<LogEntry[]>([]);
   const animationFrameRef = useRef<number>();
+
+  useEffect(() => {
+    setInteractiveZoom(zoomLevel);
+  }, [zoomLevel]);
 
   const { minTime, maxTime } = useMemo(() => {
     if (allEntries.length === 0) {
@@ -216,17 +221,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             const endPercent = (currentScrollLeft + endX) / totalWidth;
             
             const newZoom = Math.min(100, zoomLevel * (1 / (endPercent - startPercent)));
-            const focus = startPercent;
+            const focus = startPercent + (endPercent - startPercent) / 2;
 
-            setZoomLevel(newZoom);
-
-            requestAnimationFrame(() => {
-                if (timelineRef.current) {
-                    const newTotalWidth = rect.width * newZoom;
-                    const newScrollLeft = (focus * newTotalWidth);
-                    timelineRef.current.scrollLeft = newScrollLeft;
-                }
-            });
+            applyZoom(newZoom, focus);
         }
     }
     
@@ -235,7 +232,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
      if(timelineRef.current) {
         timelineRef.current.style.cursor = 'grab';
     }
-  }, [selectionBox, zoomLevel]);
+  }, [selectionBox, zoomLevel, applyZoom]);
 
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (selectionBox) {
@@ -288,8 +285,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
               <ZoomOut className="w-4 h-4 text-muted-foreground" />
               <Slider
                   aria-label="Zoom level"
-                  value={[zoomLevel]}
-                  onValueChange={(value) => applyZoom(value[0], zoomFocusPoint)}
+                  value={[interactiveZoom]}
+                  onValueChange={(value) => setInteractiveZoom(value[0])}
+                  onValueCommit={(value) => applyZoom(value[0], zoomFocusPoint)}
                   min={1}
                   max={100}
                   step={1}
@@ -409,7 +407,3 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
-
-    
-
-    
