@@ -21,6 +21,12 @@ const levelConfig: Record<EventLevel, { icon: React.ElementType, color: string }
     'Verbose': { icon: FileText, color: 'text-gray-500' },
 };
 
+// Simple pseudo-random generator to have deterministic jitter based on entry ID
+const pseudoRandom = (seed: number) => {
+    let x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+};
+
 export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
   const { minTime, maxTime } = useMemo(() => {
     if (allEntries.length === 0) {
@@ -68,13 +74,17 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                         const Icon = levelConfig[entry.level].icon;
                         const color = levelConfig[entry.level].color;
                         const position = getPosition(entry.timestamp);
+                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * 60; // -30px to 30px
 
                         return (
                             <Tooltip key={entry.id} delayDuration={100}>
                                 <TooltipTrigger asChild>
                                     <div 
-                                        className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-pointer"
-                                        style={{ left: `${position}%` }}
+                                        className="absolute top-1/2 -translate-x-1/2 cursor-pointer"
+                                        style={{ 
+                                            left: `${position}%`,
+                                            transform: `translateY(calc(-50% + ${verticalJitter}px))`,
+                                        }}
                                     >
                                         <Icon className={`w-6 h-6 ${color} transition-transform duration-200 hover:scale-150 hover:drop-shadow-[0_0_8px]`} style={{'--tw-drop-shadow-color': 'hsl(var(--primary))'} as React.CSSProperties}/>
                                     </div>
