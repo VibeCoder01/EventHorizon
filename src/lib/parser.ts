@@ -4,7 +4,18 @@ import type { LogEntry, EventLevel } from './types';
 
 // Regex patterns for various log formats
 const LOG_PATTERNS = [
-    // 1. RFC 5424 syslog format (e.g., <165>1 2003-10-11T22:14:15.003Z mymachine.example.com su - ID47 - message)
+    // 1. Modern syslog format (e.g., 2025-11-03T13:29:39.442854+00:00 VC01A wekan.mongodb[1357]: message)
+    {
+        name: 'SYSLOG_MODERN',
+        regex: /^([0-9T\:\.\-\+Z]+)\s+([\w\.\-]+)\s+([\w\.\-]+(?:\[\d+\])?):\s+(.*)$/,
+        map: (parts: string[]): Partial<LogEntry> => ({
+            timestamp: new Date(parts[1]),
+            level: 'Information', // Default level as it's not present in this format
+            source: parts[3].replace(/\[\d+\]/, ''), // Remove PID for cleaner source
+            message: parts[4]
+        })
+    },
+    // 2. RFC 5424 syslog format (e.g., <165>1 2003-10-11T22:14:15.003Z mymachine.example.com su - ID47 - message)
     {
         name: 'RFC_5424',
         regex: /^\<(\d+)\>1\s+([0-9T\:\.\-\+Z]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+(.*)$/,
@@ -15,7 +26,7 @@ const LOG_PATTERNS = [
             message: parts[8]
         })
     },
-    // 2. RFC 3164 syslog format (e.g., <34>Oct 11 22:14:15 mymachine su: 'su root' failed for lonvick on /dev/pts/8)
+    // 3. RFC 3164 syslog format (e.g., <34>Oct 11 22:14:15 mymachine su: 'su root' failed for lonvick on /dev/pts/8)
     {
         name: 'RFC_3164',
         regex: /^\<(\d+)\>([A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+([\w\.\-]+)\s+([^:]+):\s+(.*)$/,
@@ -26,7 +37,7 @@ const LOG_PATTERNS = [
             message: parts[5].trim()
         })
     },
-    // 3. Windows Event Log CSV format (e.g., "Information","1/1/2024 12:00:00 PM","Source","EventID","TaskCategory","Message")
+    // 4. Windows Event Log CSV format (e.g., "Information","1/1/2024 12:00:00 PM","Source","EventID","TaskCategory","Message")
     // This regex is flexible and captures quoted or unquoted fields.
     {
         name: 'WINDOWS_CSV',
@@ -38,7 +49,7 @@ const LOG_PATTERNS = [
             message: parts[4]
         })
     },
-    // 4. Common application log format (e.g., 2024-01-01 12:00:00,123 INFO [source] message)
+    // 5. Common application log format (e.g., 2024-01-01 12:00:00,123 INFO [source] message)
     {
         name: 'APP_LOG_1',
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}(?:,\d{3})?)\s+([A-Z]+)\s+\[([^\]]+)\]\s+(.*)$/,
@@ -49,7 +60,7 @@ const LOG_PATTERNS = [
             message: parts[4]
         })
     },
-     // 5. ISO 8601 with level and message (e.g., 2024-07-23T10:30:00.123Z [ERROR] Failed to connect to database.)
+     // 6. ISO 8601 with level and message (e.g., 2024-07-23T10:30:00.123Z [ERROR] Failed to connect to database.)
     {
         name: 'ISO_WITH_LEVEL',
         regex: /^([0-9T\:\.\-\+Z]+)\s+\[([A-Z]+)\]\s+(.*)$/,
