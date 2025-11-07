@@ -127,7 +127,7 @@ export async function parseLogFile(fileContent: string): Promise<LogEntry[]> {
         throw new Error("The uploaded file is empty or contains only whitespace.");
     }
 
-    const lines = fileContent.split(/\\r\\n|\\n/);
+    const lines = fileContent.split(/\r?\n/);
     const parsedLogs: LogEntry[] = [];
     let idCounter = 0;
 
