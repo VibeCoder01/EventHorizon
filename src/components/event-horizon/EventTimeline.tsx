@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState, useRef, useCallback, useEffect } from "react";
@@ -41,7 +42,6 @@ const pseudoRandom = (seed: number) => {
 
 export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelect }: EventTimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [interactiveZoom, setInteractiveZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [horizontalJitter, setHorizontalJitter] = useState(20);
@@ -49,10 +49,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const [zoomFocusPoint, setZoomFocusPoint] = useState(0.5); // 0.5 is the center
   const [visibleEntries, setVisibleEntries] = useState<LogEntry[]>([]);
   const animationFrameRef = useRef<number>();
-
-  useEffect(() => {
-    setInteractiveZoom(zoomLevel);
-  }, [zoomLevel]);
 
   const { minTime, maxTime } = useMemo(() => {
     if (allEntries.length === 0) {
@@ -285,9 +281,8 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
               <ZoomOut className="w-4 h-4 text-muted-foreground" />
               <Slider
                   aria-label="Zoom level"
-                  value={[interactiveZoom]}
-                  onValueChange={(value) => setInteractiveZoom(value[0])}
-                  onValueCommit={(value) => applyZoom(value[0], zoomFocusPoint)}
+                  value={[zoomLevel]}
+                  onValueChange={(value) => applyZoom(value[0], zoomFocusPoint)}
                   min={1}
                   max={100}
                   step={1}
