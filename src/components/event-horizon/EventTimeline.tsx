@@ -46,6 +46,8 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const [horizontalJitter, setHorizontalJitter] = useState(20);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; endX: number } | null>(null);
   const [zoomFocusPoint, setZoomFocusPoint] = useState(0.5); // 0.5 is the center
+  const [visibleEntries, setVisibleEntries] = useState<LogEntry[]>([]);
+  const animationFrameRef = useRef<number>();
 
   const { minTime, maxTime } = useMemo(() => {
     if (allEntries.length === 0) {
@@ -65,6 +67,54 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     return ((new Date(timestamp).getTime() - minTime) / timeRange) * 100;
   }, [minTime, timeRange]);
 
+  const updateVisibleEntries = useCallback(() => {
+    if (!timelineRef.current) return;
+    
+    const { scrollLeft, clientWidth } = timelineRef.current;
+    const timelineWidth = clientWidth * zoomLevel;
+
+    // Add a buffer to render items slightly outside the viewport
+    const buffer = clientWidth * 0.5; // 50% buffer on each side
+    const viewStart = scrollLeft - buffer;
+    const viewEnd = scrollLeft + clientWidth + buffer;
+
+    const startPercent = (viewStart / timelineWidth) * 100;
+    const endPercent = (viewEnd / timelineWidth) * 100;
+
+    const visible = entries.filter(entry => {
+      const position = getPosition(entry.timestamp);
+      return position >= startPercent && position <= endPercent;
+    });
+
+    setVisibleEntries(visible);
+
+  }, [entries, getPosition, zoomLevel]);
+
+  // Debounced update using requestAnimationFrame
+  const requestUpdate = useCallback(() => {
+    if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+    }
+    animationFrameRef.current = requestAnimationFrame(updateVisibleEntries);
+  }, [updateVisibleEntries]);
+
+  // Update visible entries on scroll, zoom, or data change
+  useEffect(() => {
+    requestUpdate();
+    
+    const timelineEl = timelineRef.current;
+    if (timelineEl) {
+        timelineEl.addEventListener('scroll', requestUpdate, { passive: true });
+        return () => {
+            timelineEl.removeEventListener('scroll', requestUpdate);
+            if(animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        };
+    }
+  }, [requestUpdate, entries, zoomLevel]);
+
+
   const applyZoom = useCallback((newZoom: number, focusPointPercent: number) => {
     if (!timelineRef.current) return;
 
@@ -80,6 +130,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     
     setZoomLevel(newZoom);
     
+    // Use requestAnimationFrame to prevent layout thrashing
     requestAnimationFrame(() => {
         if (timelineRef.current) {
             timelineRef.current.scrollLeft = newScrollLeft;
@@ -211,26 +262,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     setZoomFocusPoint(focusPercent);
     applyZoom(newZoom, focusPercent);
   }, [zoomLevel, applyZoom]);
-
-  const visibleEntries = useMemo(() => {
-    if (!timelineRef.current) return entries;
-    
-    const { scrollLeft, clientWidth } = timelineRef.current;
-    const timelineWidth = clientWidth * zoomLevel;
-
-    const startPercent = (scrollLeft / timelineWidth) * 100;
-    const endPercent = ((scrollLeft + clientWidth) / timelineWidth) * 100;
-
-    const buffer = 10; 
-    const bufferedStart = Math.max(0, startPercent - buffer);
-    const bufferedEnd = Math.min(100, endPercent + buffer);
-
-    return entries.filter(entry => {
-      const position = getPosition(entry.timestamp);
-      return position >= bufferedStart && position <= bufferedEnd;
-    });
-  }, [entries, getPosition, zoomLevel, timelineRef.current?.scrollLeft, timelineRef.current?.clientWidth]);
-
 
   if (allEntries.length === 0) {
     return (
@@ -378,5 +409,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
+
+    
 
     
