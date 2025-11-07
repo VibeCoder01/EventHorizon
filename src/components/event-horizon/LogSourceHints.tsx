@@ -1,12 +1,14 @@
 "use client";
 
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { FileCode, Info } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const commonLogs = [
   {
@@ -36,34 +38,56 @@ const commonLogs = [
 ];
 
 export function LogSourceHints() {
+  const { toast } = useToast();
+
+  const handleCopyPath = (path: string) => {
+    navigator.clipboard.writeText(path).then(() => {
+      toast({
+        title: "Path Copied!",
+        description: `${path} has been copied to your clipboard.`,
+      });
+    }).catch(err => {
+      console.error('Failed to copy text: ', err);
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy path to clipboard.",
+        variant: "destructive"
+      })
+    });
+  };
+
   return (
     <div className="mt-8 max-w-2xl mx-auto">
         <h3 className="flex items-center justify-center gap-2 text-sm font-semibold text-muted-foreground mb-4">
             <Info className="w-4 h-4" />
-            Not sure where to find logs? Here are some common locations on Linux:
+            Not sure where to find logs? Hover for info, click to copy path.
         </h3>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-        {commonLogs.map((log) => (
-          <Popover key={log.path}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="font-mono text-xs h-8">
-                <FileCode className="mr-2 h-4 w-4" />
-                {log.path}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 bg-popover text-popover-foreground border-border">
-              <div className="grid gap-4">
-                <div className="space-y-2">
-                  <h4 className="font-semibold leading-none">{log.name}</h4>
-                  <p className="text-sm text-muted-foreground">
-                    {log.description}
-                  </p>
+        <TooltipProvider>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+            {commonLogs.map((log) => (
+            <Tooltip key={log.path} delayDuration={150}>
+                <TooltipTrigger asChild>
+                <Button 
+                    variant="outline" 
+                    className="font-mono text-xs h-8"
+                    onClick={() => handleCopyPath(log.path)}
+                >
+                    <FileCode className="mr-2 h-4 w-4" />
+                    {log.path}
+                </Button>
+                </TooltipTrigger>
+                <TooltipContent className="w-80 bg-popover text-popover-foreground border-border">
+                <div className="space-y-1.5 p-1">
+                    <h4 className="font-semibold leading-none">{log.name}</h4>
+                    <p className="text-sm text-muted-foreground">
+                        {log.description}
+                    </p>
                 </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-        ))}
-        </div>
+                </TooltipContent>
+            </Tooltip>
+            ))}
+            </div>
+        </TooltipProvider>
     </div>
   );
 }
