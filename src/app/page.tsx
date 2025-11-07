@@ -11,6 +11,7 @@ import { SignificantFindings } from "@/components/event-horizon/SignificantFindi
 import { useToast } from "@/hooks/use-toast";
 import { parseLogFile } from "@/lib/parser";
 import { LogSourceHints } from "@/components/event-horizon/LogSourceHints";
+import { AddLogFile } from "@/components/event-horizon/AddLogFile";
 
 const ALL_LEVELS: EventLevel[] = ['Information', 'Warning', 'Error', 'Critical', 'Verbose', 'Debug', 'Notice', 'Emergency', 'Alert'];
 
@@ -38,11 +39,21 @@ export default function Home() {
     return availableSources;
   }, [availableSources]);
 
-  const handleLogsParsed = (logs: LogEntry[]) => {
-    setLogEntries(logs);
+  const handleLogsParsed = (newLogs: LogEntry[]) => {
+    const lastId = logEntries.length > 0 ? logEntries[logEntries.length - 1].id : -1;
+    const logsWithUniqueIds = newLogs.map((log, index) => ({
+      ...log,
+      id: lastId + 1 + index,
+    }));
+    
+    const combinedLogs = [...logEntries, ...logsWithUniqueIds].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    setLogEntries(combinedLogs);
     toast({
       title: "Logs parsed successfully",
-      description: `Loaded ${logs.length} log entries.`,
+      description: `Added ${newLogs.length} log entries. Total: ${combinedLogs.length}.`,
     });
   };
   
@@ -95,7 +106,7 @@ export default function Home() {
         <div className="mt-8 grid grid-cols-1 gap-8">
           <section id="timeline" className="space-y-6">
              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="md:col-span-1">
+                <div className="md:col-span-1 space-y-4">
                     <FilterControls
                         filters={filters}
                         setFilters={setFiltersCallback}
@@ -104,6 +115,7 @@ export default function Home() {
                         availableLevels={availableLevels}
                         availableSources={availableSources}
                      />
+                     <AddLogFile onLogsParsed={handleLogsParsed} onError={handleError} parser={parseLogFile} />
                 </div>
                 <div className="md:col-span-3">
                     <EventTimeline 

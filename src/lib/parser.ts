@@ -82,17 +82,6 @@ const LOG_PATTERNS = [
             message: parts[3]
         })
     },
-    // 7. Generic log with no timestamp (e.g. boot.log)
-    {
-        name: 'GENERIC_NO_TIMESTAMP',
-        regex: /^(.*)$/,
-        map: (parts: string[]): Partial<LogEntry> => ({
-            timestamp: new Date(), // Use current time as a fallback
-            level: inferLevelFromMessage(parts[1]),
-            source: 'boot',
-            message: parts[1]
-        })
-    }
 ];
 
 // Infer level from message content for logs that don't specify a level
@@ -177,8 +166,10 @@ export async function parseLogFile(fileContent: string): Promise<LogEntry[]> {
 
     const lines = fileContent.split(/\r?\n/);
     const parsedLogs: LogEntry[] = [];
+    const fallbackTimestamp = new Date();
     let idCounter = 0;
 
+    let successfulParses = 0;
     for (const line of lines) {
         if (!line.trim()) continue;
 
@@ -188,7 +179,6 @@ export async function parseLogFile(fileContent: string): Promise<LogEntry[]> {
             if (match) {
                 try {
                     const partialEntry = pattern.map(match);
-                    // Crucially, verify that the timestamp is a valid date.
                     if (partialEntry.timestamp && !isNaN(partialEntry.timestamp.getTime())) {
                         parsedLogs.push({
                             id: idCounter++,
@@ -198,19 +188,36 @@ export async function parseLogFile(fileContent: string): Promise<LogEntry[]> {
                             message: partialEntry.message || line,
                         });
                         entryParsed = true;
-                        // Found a valid match, so we can break and go to the next line.
+                        successfulParses++;
                         break; 
                     }
                 } catch (e) {
-                    // This can happen if date parsing or another mapping step fails.
-                    // We'll ignore the error and let the loop try the next pattern.
+                    // Ignore and try next pattern
                 }
             }
         }
+        if (!entryParsed) {
+            // Fallback for lines that don't match any pattern with a timestamp
+             parsedLogs.push({
+                id: idCounter++,
+                timestamp: fallbackTimestamp,
+                level: inferLevelFromMessage(line),
+                source: 'Unknown',
+                message: line,
+            });
+        }
     }
 
+    if (successfulParses === 0) {
+        // If we only have generic matches, the format is likely unsupported
+        const genericMatches = parsedLogs.filter(p => p.source === 'Unknown').length;
+        if(genericMatches / parsedLogs.length > 0.5) {
+             throw new Error("Could not parse most entries. Please check the file format.");
+        }
+    }
+    
     if (parsedLogs.length === 0) {
-        throw new Error("Could not parse any recognizable log entries. Please check the file format.");
+         throw new Error("Could not parse any recognizable log entries. The file might be empty or in an unsupported format.");
     }
 
     return parsedLogs;
