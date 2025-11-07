@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Upload, FileText, Loader2 } from "lucide-react";
+import { Upload, FileText, Loader2, Info } from "lucide-react";
 import type { LogEntry } from "@/lib/types";
 
 interface LogUploaderProps {
@@ -67,10 +67,10 @@ export function LogUploader({ onLogsParsed, onError, parser }: LogUploaderProps)
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
-       if (file.type.startsWith('text/') || file.name.endsWith('.log')) {
+       if (file.type.startsWith('text/') || file.name.endsWith('.log') || file.name.endsWith('.csv')) {
         processLogFile(file);
       } else {
-        onError("Invalid file type. Please upload a text-based log file (.log, .txt, etc).");
+        onError("Invalid file type. Please upload a text-based log file (.log, .txt, .csv).");
       }
       e.dataTransfer.clearData();
     }
@@ -89,7 +89,7 @@ export function LogUploader({ onLogsParsed, onError, parser }: LogUploaderProps)
         id="log-uploader-input" 
         className="hidden"
         onChange={handleFileChange}
-        accept=".log,.txt,text/*"
+        accept=".log,.txt,text/*,.csv"
         disabled={isLoading}
       />
       <Card
@@ -124,15 +124,15 @@ export function LogUploader({ onLogsParsed, onError, parser }: LogUploaderProps)
                         Drop your log file here
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground max-w-sm">
-                        or click to browse. Supports standard log files (.log, .txt).
+                        or click to browse. Supports text-based logs like .log, .txt, and .csv files.
                     </p>
                 </>
             )}
         </CardContent>
       </Card>
-      <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-        <FileText className="w-4 h-4" />
-        <p>AI will attempt to parse standard log formats.</p>
+      <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground p-4 bg-secondary/30 rounded-lg max-w-md mx-auto">
+        <Info className="w-4 h-4 shrink-0" />
+        <p>To analyze Windows Event Logs, export them from Event Viewer as a .csv file.</p>
       </div>
     </>
   );
