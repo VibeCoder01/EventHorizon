@@ -266,7 +266,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
               />
               <ZoomIn className="w-4 h-4 text-muted-foreground" />
             </div>
-            <Button variant="outline" size="sm" onClick={() => setZoomLevel(1)}><Search className="w-4 h-4 mr-0 md:mr-2" /><span className="hidden md:inline">Reset</span></Button>
+            <Button variant="outline" size="sm" onClick={() => applyZoom(1, 0.5)}><Search className="w-4 h-4 mr-0 md:mr-2" /><span className="hidden md:inline">Reset</span></Button>
             <Popover>
                 <PopoverTrigger asChild>
                     <Button variant="outline" size="icon"><SlidersHorizontal className="w-4 h-4" /></Button>
