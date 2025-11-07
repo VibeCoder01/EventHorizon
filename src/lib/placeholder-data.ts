@@ -1,8 +1,8 @@
 import type { LogEntry, EventLevel, EventSource } from './types';
 
-const levels: EventLevel[] = ['Information', 'Warning', 'Error', 'Critical', 'Verbose'];
-const sources: EventSource[] = ['Application', 'System', 'Security', 'Kernel', 'Auth', 'Cron'];
-const messages = [
+export const levels: EventLevel[] = ['Information', 'Warning', 'Error', 'Critical', 'Verbose'];
+export const sources: EventSource[] = ['Application', 'System', 'Security', 'Kernel', 'Auth', 'Cron'];
+export const messages = [
   "Service started successfully.",
   "Configuration file loaded.",
   "User authentication failed for user 'admin'.",

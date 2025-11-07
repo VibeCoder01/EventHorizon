@@ -30,6 +30,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  env: {
+    NEXT_PUBLIC_FIREBASE_APP_HOSTING_URL: process.env.FIREBASE_APP_HOSTING_URL || '',
+  }
 };
 
 export default nextConfig;
