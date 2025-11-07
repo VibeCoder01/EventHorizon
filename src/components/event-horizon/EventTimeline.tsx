@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useMemo, useState, useRef, useCallback } from "react";
@@ -95,6 +96,45 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
     }
   }, []);
 
+  const handleDoubleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!timelineRef.current) return;
+
+    const rect = timelineRef.current.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    
+    // Calculate the percentage position of the click within the visible area
+    const clickPercentInView = clickX / rect.width;
+    
+    // Calculate the overall scroll position in the zoomed timeline
+    const currentScrollLeft = timelineRef.current.scrollLeft;
+    const totalWidth = rect.width * zoomLevel;
+
+    // The position of the click in the total timeline content (in pixels)
+    const clickPositionInTotal = currentScrollLeft + clickX;
+    
+    // The position of the click as a percentage of the total timeline
+    const clickTimePercent = clickPositionInTotal / totalWidth;
+
+    const newZoomLevel = Math.min(100, zoomLevel * 2);
+
+    setZoomLevel(newZoomLevel);
+    
+    // After zoom, the new total width changes
+    const newTotalWidth = rect.width * newZoomLevel;
+    
+    // We want the click point to be the new center.
+    // The new scrollLeft should be the click's position in the new total width minus half the viewport width.
+    const newScrollLeft = (clickTimePercent * newTotalWidth) - (rect.width / 2);
+    
+    // Use requestAnimationFrame to ensure the scroll happens after the new zoom level is applied
+    requestAnimationFrame(() => {
+        if(timelineRef.current) {
+            timelineRef.current.scrollLeft = newScrollLeft;
+        }
+    });
+
+  }, [zoomLevel]);
+
   const visibleEntries = useMemo(() => {
     if (!timelineRef.current) return entries;
     
@@ -183,6 +223,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
               onMouseUp={handleMouseUp}
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
+              onDoubleClick={handleDoubleClick}
             >
                 <div 
                     className="relative h-full"
