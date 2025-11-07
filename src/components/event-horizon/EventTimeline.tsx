@@ -67,14 +67,14 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
       <CardContent className="pt-4 pb-8">
         <TooltipProvider>
             <ScrollArea className="w-full whitespace-nowrap">
-                <div className="relative w-full h-64 flex items-center px-4">
+                <div className="relative w-full h-96 flex items-center px-4">
                     <div className="absolute top-1/2 left-0 w-full h-0.5 bg-secondary -translate-y-1/2" />
                     
                     {entries.map((entry) => {
                         const Icon = levelConfig[entry.level].icon;
                         const color = levelConfig[entry.level].color;
                         const position = getPosition(entry.timestamp);
-                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * 240; // -120px to 120px
+                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * 360;
 
                         return (
                             <Tooltip key={entry.id} delayDuration={100}>
