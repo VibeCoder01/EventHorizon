@@ -40,7 +40,7 @@ const pseudoRandom = (seed: number) => {
     return x - Math.floor(x);
 };
 
-const DEBOUNCE_DELAY = 50; // ms
+const DEBOUNCE_DELAY = 150; // ms
 
 export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelect }: EventTimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1);
