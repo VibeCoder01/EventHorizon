@@ -74,7 +74,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                         const Icon = levelConfig[entry.level].icon;
                         const color = levelConfig[entry.level].color;
                         const position = getPosition(entry.timestamp);
-                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * 140; // -70px to 70px
+                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * 180; // -90px to 90px
 
                         return (
                             <Tooltip key={entry.id} delayDuration={100}>
