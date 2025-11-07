@@ -5,8 +5,12 @@ import { format } from "date-fns";
 import type { LogEntry, EventLevel } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, AlertTriangle, XCircle, AlertOctagon, FileText, Bug, Bell, ShieldAlert, Siren, ZoomIn, ZoomOut, Search } from "lucide-react";
+import { Info, AlertTriangle, XCircle, AlertOctagon, FileText, Bug, Bell, ShieldAlert, Siren, ZoomIn, ZoomOut, Search, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
 
 interface EventTimelineProps {
   entries: LogEntry[];
@@ -36,6 +40,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const [jitter, setJitter] = useState(250); // Max vertical jitter in pixels
 
   const { minTime, maxTime } = useMemo(() => {
     if (allEntries.length === 0) {
@@ -101,7 +106,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
   return (
     <Card className="h-[600px] bg-card/50 flex flex-col">
       <CardHeader>
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-start">
           <div>
             <CardTitle className="text-lg">Event Timeline</CardTitle>
             <CardDescription>
@@ -112,6 +117,35 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
             <Button variant="outline" size="sm" onClick={() => setZoomLevel(p => Math.max(1, p / 1.2))}><ZoomOut className="w-4 h-4" /></Button>
             <Button variant="outline" size="sm" onClick={() => setZoomLevel(p => Math.min(100, p * 1.2))}><ZoomIn className="w-4 h-4" /></Button>
             <Button variant="outline" size="sm" onClick={() => setZoomLevel(1)}><Search className="w-4 h-4 mr-2" />Reset</Button>
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm"><SlidersHorizontal className="w-4 h-4" /></Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-4">
+                    <div className="grid gap-4">
+                        <div className="space-y-2">
+                           <h4 className="font-medium leading-none">Jitter</h4>
+                           <p className="text-sm text-muted-foreground">
+                             Adjust to separate overlapping events.
+                           </p>
+                        </div>
+                        <div className="grid gap-2">
+                            <div className="grid grid-cols-3 items-center gap-4">
+                                <Label htmlFor="jitter">Vertical</Label>
+                                <Slider
+                                    id="jitter"
+                                    min={0}
+                                    max={500}
+                                    step={10}
+                                    value={[jitter]}
+                                    onValueChange={(value) => setJitter(value[0])}
+                                    className="col-span-2"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </PopoverContent>
+            </Popover>
           </div>
         </div>
       </CardHeader>
@@ -137,7 +171,9 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                         const Icon = config.icon;
                         const color = config.color;
                         const position = getPosition(entry.timestamp);
-                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * 500;
+                        
+                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * jitter;
+                        const horizontalJitter = (pseudoRandom(entry.id * 3) - 0.5) * (jitter / 20); // Smaller horizontal jitter
 
                         return (
                             <Tooltip key={entry.id} delayDuration={100}>
@@ -146,7 +182,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                                         className="absolute top-1/2 -translate-x-1/2 cursor-pointer"
                                         style={{ 
                                             left: `${position}%`,
-                                            transform: `translate(-50%, calc(-50% + ${verticalJitter}px))`,
+                                            transform: `translate(calc(-50% + ${horizontalJitter}px), calc(-50% + ${verticalJitter}px))`,
                                         }}
                                     >
                                         <Icon className={`w-6 h-6 ${color} transition-transform duration-200 hover:scale-150 hover:drop-shadow-[0_0_8px]`} style={{'--tw-drop-shadow-color': 'hsl(var(--primary))'} as React.CSSProperties}/>
