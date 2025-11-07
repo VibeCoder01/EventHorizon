@@ -134,11 +134,13 @@ export async function parseLogFile(fileContent: string): Promise<LogEntry[]> {
     for (const line of lines) {
         if (!line.trim()) continue;
 
+        let entryParsed = false;
         for (const pattern of LOG_PATTERNS) {
             const match = line.match(pattern.regex);
             if (match) {
                 try {
                     const partialEntry = pattern.map(match);
+                    // Crucially, verify that the timestamp is a valid date.
                     if (partialEntry.timestamp && !isNaN(partialEntry.timestamp.getTime())) {
                         parsedLogs.push({
                             id: idCounter++,
@@ -147,12 +149,13 @@ export async function parseLogFile(fileContent: string): Promise<LogEntry[]> {
                             source: partialEntry.source || 'Unknown',
                             message: partialEntry.message || line,
                         });
-                        // Found a match, so we can break and go to the next line
+                        entryParsed = true;
+                        // Found a valid match, so we can break and go to the next line.
                         break; 
                     }
                 } catch (e) {
-                    // This can happen if date parsing fails, for instance.
-                    console.warn(`Failed to parse line with pattern ${pattern.name}:`, line, e);
+                    // This can happen if date parsing or another mapping step fails.
+                    // We'll ignore the error and let the loop try the next pattern.
                 }
             }
         }
