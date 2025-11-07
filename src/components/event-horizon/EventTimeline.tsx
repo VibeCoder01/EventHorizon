@@ -42,7 +42,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const [horizontalJitter, setHorizontalJitter] = useState(20); // Slider controls horizontal jitter
+  const [horizontalJitter, setHorizontalJitter] = useState(20);
 
   const { minTime, maxTime } = useMemo(() => {
     if (allEntries.length === 0) {
@@ -57,10 +57,10 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
 
   const timeRange = maxTime - minTime;
   
-  const getPosition = (timestamp: Date) => {
+  const getPosition = useCallback((timestamp: Date) => {
     if (timeRange === 0) return 50;
     return ((new Date(timestamp).getTime() - minTime) / timeRange) * 100;
-  };
+  }, [minTime, timeRange]);
   
   const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -94,6 +94,28 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
         timelineRef.current.style.cursor = 'grab';
     }
   }, []);
+
+  const visibleEntries = useMemo(() => {
+    if (!timelineRef.current) return entries;
+    
+    const { scrollLeft, clientWidth } = timelineRef.current;
+    const timelineWidth = clientWidth * zoomLevel;
+
+    // Calculate the visible percentage range of the timeline
+    const startPercent = (scrollLeft / timelineWidth) * 100;
+    const endPercent = ((scrollLeft + clientWidth) / timelineWidth) * 100;
+
+    // Add a buffer to render items slightly outside the viewport
+    const buffer = 10; 
+    const bufferedStart = Math.max(0, startPercent - buffer);
+    const bufferedEnd = Math.min(100, endPercent + buffer);
+
+    return entries.filter(entry => {
+      const position = getPosition(entry.timestamp);
+      return position >= bufferedStart && position <= bufferedEnd;
+    });
+  }, [entries, getPosition, zoomLevel, timelineRef.current?.scrollLeft, timelineRef.current?.clientWidth]);
+
 
   if (allEntries.length === 0) {
     return (
@@ -168,7 +190,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                 >
                     <div className="absolute top-1/2 left-0 w-full h-0.5 bg-secondary -translate-y-1/2" />
                     
-                    {entries.map((entry) => {
+                    {visibleEntries.map((entry) => {
                         const config = levelConfig[entry.level] || levelConfig['Information'];
                         const Icon = config.icon;
                         const color = config.color;
