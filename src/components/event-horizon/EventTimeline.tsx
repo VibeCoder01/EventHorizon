@@ -137,7 +137,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                         const Icon = config.icon;
                         const color = config.color;
                         const position = getPosition(entry.timestamp);
-                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * 580;
+                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * 500;
 
                         return (
                             <Tooltip key={entry.id} delayDuration={100}>
@@ -146,7 +146,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                                         className="absolute top-1/2 -translate-x-1/2 cursor-pointer"
                                         style={{ 
                                             left: `${position}%`,
-                                            transform: `translateY(calc(-50% + ${verticalJitter}px))`,
+                                            transform: `translate(-50%, calc(-50% + ${verticalJitter}px))`,
                                         }}
                                     >
                                         <Icon className={`w-6 h-6 ${color} transition-transform duration-200 hover:scale-150 hover:drop-shadow-[0_0_8px]`} style={{'--tw-drop-shadow-color': 'hsl(var(--primary))'} as React.CSSProperties}/>
