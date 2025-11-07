@@ -15,7 +15,7 @@ export function SignificantFindings({ entries }: SignificantFindingsProps) {
       return { errors: 0, warnings: 0, total: 0 };
     }
     return {
-      errors: entries.filter(e => e.level === 'Error' || e.level === 'Critical').length,
+      errors: entries.filter(e => e.level === 'Error' || e.level === 'Critical' || e.level === 'Emergency' || e.level === 'Alert').length,
       warnings: entries.filter(e => e.level === 'Warning').length,
       total: entries.length,
     };

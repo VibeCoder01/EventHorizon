@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import type { LogEntry, EventLevel } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, AlertTriangle, XCircle, AlertOctagon, FileText } from "lucide-react";
+import { Info, AlertTriangle, XCircle, AlertOctagon, FileText, Bug, Bell, ShieldAlert, Siren } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 interface EventTimelineProps {
@@ -17,9 +17,14 @@ const levelConfig: Record<EventLevel, { icon: React.ElementType, color: string }
     'Information': { icon: Info, color: 'text-blue-400' },
     'Warning': { icon: AlertTriangle, color: 'text-yellow-400' },
     'Error': { icon: XCircle, color: 'text-red-500' },
-    'Critical': { icon: AlertOctagon, color: 'text-red-700' },
+    'Critical': { icon: AlertOctagon, color: 'text-red-600' },
     'Verbose': { icon: FileText, color: 'text-gray-500' },
+    'Debug': { icon: Bug, color: 'text-purple-400' },
+    'Notice': { icon: Bell, color: 'text-green-400' },
+    'Emergency': { icon: Siren, color: 'text-orange-500' },
+    'Alert': { icon: ShieldAlert, color: 'text-pink-500' },
 };
+
 
 // Simple pseudo-random generator to have deterministic jitter based on entry ID
 const pseudoRandom = (seed: number) => {
@@ -32,7 +37,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
     if (allEntries.length === 0) {
       return { minTime: 0, maxTime: 0 };
     }
-    const timestamps = allEntries.map(e => e.timestamp.getTime());
+    const timestamps = allEntries.map(e => new Date(e.timestamp).getTime());
     return {
       minTime: Math.min(...timestamps),
       maxTime: Math.max(...timestamps),
@@ -43,7 +48,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
   
   const getPosition = (timestamp: Date) => {
     if (timeRange === 0) return 50;
-    return ((timestamp.getTime() - minTime) / timeRange) * 100;
+    return ((new Date(timestamp).getTime() - minTime) / timeRange) * 100;
   };
   
   if (allEntries.length === 0) {
@@ -71,8 +76,9 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                     <div className="absolute top-1/2 left-0 w-full h-0.5 bg-secondary -translate-y-1/2" />
                     
                     {entries.map((entry) => {
-                        const Icon = levelConfig[entry.level].icon;
-                        const color = levelConfig[entry.level].color;
+                        const config = levelConfig[entry.level] || levelConfig['Information'];
+                        const Icon = config.icon;
+                        const color = config.color;
                         const position = getPosition(entry.timestamp);
                         const verticalJitter = (pseudoRandom(entry.id) - 0.5) * 480;
 
@@ -91,15 +97,15 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                                 </TooltipTrigger>
                                 <TooltipContent className="bg-popover text-popover-foreground border-border">
                                     <div className="font-bold">{entry.level}</div>
-                                    <div className="text-sm text-muted-foreground">{format(entry.timestamp, "MMM d, yyyy, HH:mm:ss")}</div>
+                                    <div className="text-sm text-muted-foreground">{format(new Date(entry.timestamp), "MMM d, yyyy, HH:mm:ss")}</div>
                                     <p className="max-w-xs text-wrap mt-1">{entry.message}</p>
                                 </TooltipContent>
                             </Tooltip>
                         )
                     })}
                     
-                     <div className="absolute top-full text-xs text-muted-foreground left-0">{format(new Date(minTime), "HH:mm")}</div>
-                     <div className="absolute top-full text-xs text-muted-foreground right-0">{format(new Date(maxTime), "HH:mm")}</div>
+                     <div className="absolute top-full text-xs text-muted-foreground left-0">{minTime ? format(new Date(minTime), "HH:mm") : ''}</div>
+                     <div className="absolute top-full text-xs text-muted-foreground right-0">{maxTime ? format(new Date(maxTime), "HH:mm") : ''}</div>
                 </div>
                 <ScrollBar orientation="horizontal" />
             </ScrollArea>

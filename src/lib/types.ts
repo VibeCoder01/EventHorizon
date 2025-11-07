@@ -1,11 +1,11 @@
-export type EventLevel = 'Information' | 'Warning' | 'Error' | 'Critical' | 'Verbose';
-export type EventSource = 'Application' | 'System' | 'Security' | 'Kernel' | 'Auth' | 'Cron';
+export type EventLevel = 'Information' | 'Warning' | 'Error' | 'Critical' | 'Verbose' | 'Debug' | 'Notice' | 'Emergency' | 'Alert';
+export type EventSource = string; // Allow for dynamic sources from logs
 
 export interface LogEntry {
   id: number;
   timestamp: Date;
   level: EventLevel;
-  source: EventSource;
+  source: string;
   message: string;
 }
 

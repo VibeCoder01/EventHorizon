@@ -2,44 +2,31 @@
 
 import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Upload, FileJson, Loader2 } from "lucide-react";
+import { Upload, FileText, Loader2 } from "lucide-react";
 import type { LogEntry } from "@/lib/types";
 
 interface LogUploaderProps {
   onLogsParsed: (logs: LogEntry[]) => void;
   onError: (errorMessage: string) => void;
+  parser: (fileContent: string) => Promise<LogEntry[]>;
 }
 
-export function LogUploader({ onLogsParsed, onError }: LogUploaderProps) {
+export function LogUploader({ onLogsParsed, onError, parser }: LogUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const parseLogFile = (file: File) => {
+  const processLogFile = (file: File) => {
     setIsLoading(true);
     const reader = new FileReader();
 
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const content = event.target?.result as string;
         if (!content) {
             throw new Error("File is empty.");
         }
-        
-        const lines = content.split('\n').filter(line => line.trim() !== '');
-        const parsedLogs: LogEntry[] = lines.map((line, index) => {
-            try {
-                const log = JSON.parse(line);
-                // Basic validation
-                if (!log.timestamp || !log.level || !log.source || !log.message) {
-                    throw new Error(`Missing required fields on line ${index + 1}.`);
-                }
-                return { ...log, id: log.id ?? index, timestamp: new Date(log.timestamp) };
-            } catch (e) {
-                throw new Error(`Invalid JSON on line ${index + 1}.`);
-            }
-        });
-
-        onLogsParsed(parsedLogs.sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime()));
+        const parsedLogs = await parser(content);
+        onLogsParsed(parsedLogs.sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
       } catch (error) {
         const message = error instanceof Error ? error.message : "An unknown error occurred during parsing.";
         onError(message);
@@ -80,18 +67,18 @@ export function LogUploader({ onLogsParsed, onError }: LogUploaderProps) {
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
-      if (file.type === 'application/json' || file.name.endsWith('.log') || file.name.endsWith('.jsonl')) {
-        parseLogFile(file);
+       if (file.type.startsWith('text/') || file.name.endsWith('.log')) {
+        processLogFile(file);
       } else {
-        onError("Invalid file type. Please upload a .log, .jsonl, or .json file.");
+        onError("Invalid file type. Please upload a text-based log file (.log, .txt, etc).");
       }
       e.dataTransfer.clearData();
     }
-  }, [parseLogFile, onError]);
+  }, [processLogFile, onError]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      parseLogFile(e.target.files[0]);
+      processLogFile(e.target.files[0]);
     }
   };
 
@@ -102,7 +89,7 @@ export function LogUploader({ onLogsParsed, onError }: LogUploaderProps) {
         id="log-uploader-input" 
         className="hidden"
         onChange={handleFileChange}
-        accept=".log,.jsonl,application/json"
+        accept=".log,.txt,text/*"
         disabled={isLoading}
       />
       <Card
@@ -123,9 +110,9 @@ export function LogUploader({ onLogsParsed, onError }: LogUploaderProps) {
             {isLoading ? (
                 <>
                     <Loader2 className="w-12 h-12 text-primary animate-spin" />
-                    <p className="mt-6 text-xl font-semibold text-foreground">Analyzing Logs...</p>
+                    <p className="mt-6 text-xl font-semibold text-foreground">Analyzing Logs with AI...</p>
                     <p className="mt-2 text-sm text-muted-foreground max-w-sm">
-                        Please wait while we process your log file.
+                        This may take a moment. The AI is parsing your log file.
                     </p>
                 </>
             ) : (
@@ -137,15 +124,15 @@ export function LogUploader({ onLogsParsed, onError }: LogUploaderProps) {
                         Drop your log file here
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground max-w-sm">
-                        or click to browse. Supports JSONL format (.log, .jsonl).
+                        or click to browse. Supports standard log files (.log, .txt).
                     </p>
                 </>
             )}
         </CardContent>
       </Card>
       <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-        <FileJson className="w-4 h-4" />
-        <p>Expected format: One valid JSON object per line.</p>
+        <FileText className="w-4 h-4" />
+        <p>AI will attempt to parse standard log formats.</p>
       </div>
     </>
   );

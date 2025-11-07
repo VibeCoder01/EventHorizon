@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import type { LogEntry, FilterState, EventLevel, EventSource } from "@/lib/types";
 import { EventHorizonHeader } from "@/components/event-horizon/EventHorizonHeader";
 import { LogUploader } from "@/components/event-horizon/LogUploader";
@@ -9,9 +9,9 @@ import { EventTimeline } from "@/components/event-horizon/EventTimeline";
 import { EventTable } from "@/components/event-horizon/EventTable";
 import { SignificantFindings } from "@/components/event-horizon/SignificantFindings";
 import { useToast } from "@/hooks/use-toast";
+import { parseLogFile } from "@/lib/parser";
 
-const ALL_LEVELS: EventLevel[] = ['Information', 'Warning', 'Error', 'Critical', 'Verbose'];
-const ALL_SOURCES: EventSource[] = ['Application', 'System', 'Security', 'Kernel', 'Auth', 'Cron'];
+const ALL_LEVELS: EventLevel[] = ['Information', 'Warning', 'Error', 'Critical', 'Verbose', 'Debug', 'Notice', 'Emergency', 'Alert'];
 
 export default function Home() {
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
@@ -21,10 +21,16 @@ export default function Home() {
     sources: [],
   });
   
+  const allSources = useMemo(() => {
+    if (!logEntries.length) return [];
+    const sources = new Set(logEntries.map(entry => entry.source));
+    return Array.from(sources).sort();
+  }, [logEntries]);
+
   const handleLogsParsed = (logs: LogEntry[]) => {
     setLogEntries(logs);
     toast({
-      title: "Logs loaded successfully",
+      title: "Logs parsed successfully",
       description: `Loaded ${logs.length} log entries.`,
     });
   };
@@ -51,13 +57,17 @@ export default function Home() {
     });
   }, [logEntries, filters]);
 
+  const setFiltersCallback = useCallback((newFilters: FilterState) => {
+    setFilters(newFilters);
+  }, []);
+
   return (
     <main className="container mx-auto px-4 py-8">
       <EventHorizonHeader onReset={logEntries.length > 0 ? handleReset : undefined} />
 
       {logEntries.length === 0 ? (
         <div className="mt-16 text-center">
-          <LogUploader onLogsParsed={handleLogsParsed} onError={handleError} />
+          <LogUploader onLogsParsed={handleLogsParsed} onError={handleError} parser={parseLogFile} />
         </div>
       ) : (
         <div className="mt-8 grid grid-cols-1 gap-8">
@@ -66,9 +76,9 @@ export default function Home() {
                 <div className="md:col-span-1">
                     <FilterControls
                         filters={filters}
-                        setFilters={setFilters}
+                        setFilters={setFiltersCallback}
                         allLevels={ALL_LEVELS}
-                        allSources={ALL_SOURCES}
+                        allSources={allSources}
                      />
                 </div>
                 <div className="md:col-span-3">

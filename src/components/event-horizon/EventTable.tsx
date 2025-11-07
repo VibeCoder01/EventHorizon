@@ -24,6 +24,10 @@ const levelColors: Record<EventLevel, string> = {
     'Error': 'bg-red-900/50 text-red-300 border-red-500/30',
     'Critical': 'bg-red-700/50 text-red-200 border-red-400/30',
     'Verbose': 'bg-gray-700/50 text-gray-400 border-gray-500/30',
+    'Debug': 'bg-purple-900/50 text-purple-300 border-purple-500/30',
+    'Notice': 'bg-green-900/50 text-green-300 border-green-500/30',
+    'Emergency': 'bg-orange-800/50 text-orange-200 border-orange-500/30',
+    'Alert': 'bg-pink-800/50 text-pink-200 border-pink-500/30',
 };
 
 export function EventTable({ entries }: EventTableProps) {
