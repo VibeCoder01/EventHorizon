@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState, useRef, useCallback } from "react";
@@ -29,6 +30,7 @@ const levelConfig: Record<EventLevel, { icon: React.ElementType, color: string }
     'Alert': { icon: ShieldAlert, color: 'text-pink-500' },
 };
 
+const MAX_VERTICAL_JITTER = 250; // Constant max vertical spread
 
 // Simple pseudo-random generator to have deterministic jitter based on entry ID
 const pseudoRandom = (seed: number) => {
@@ -40,7 +42,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const [jitter, setJitter] = useState(250); // Max vertical jitter in pixels
+  const [horizontalJitter, setHorizontalJitter] = useState(20); // Slider controls horizontal jitter
 
   const { minTime, maxTime } = useMemo(() => {
     if (allEntries.length === 0) {
@@ -124,21 +126,21 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                 <PopoverContent className="w-56 p-4">
                     <div className="grid gap-4">
                         <div className="space-y-2">
-                           <h4 className="font-medium leading-none">Jitter</h4>
+                           <h4 className="font-medium leading-none">Jitter Control</h4>
                            <p className="text-sm text-muted-foreground">
-                             Adjust to separate overlapping events.
+                             Adjust horizontal spread of events.
                            </p>
                         </div>
                         <div className="grid gap-2">
                             <div className="grid grid-cols-3 items-center gap-4">
-                                <Label htmlFor="jitter">Vertical</Label>
+                                <Label htmlFor="jitter">Horizontal</Label>
                                 <Slider
                                     id="jitter"
                                     min={0}
-                                    max={500}
-                                    step={10}
-                                    value={[jitter]}
-                                    onValueChange={(value) => setJitter(value[0])}
+                                    max={100}
+                                    step={1}
+                                    value={[horizontalJitter]}
+                                    onValueChange={(value) => setHorizontalJitter(value[0])}
                                     className="col-span-2"
                                 />
                             </div>
@@ -172,8 +174,8 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                         const color = config.color;
                         const position = getPosition(entry.timestamp);
                         
-                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * jitter;
-                        const horizontalJitter = (pseudoRandom(entry.id * 3) - 0.5) * (jitter / 20); // Smaller horizontal jitter
+                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * MAX_VERTICAL_JITTER;
+                        const horizontalJitterOffset = (pseudoRandom(entry.id * 3) - 0.5) * horizontalJitter;
 
                         return (
                             <Tooltip key={entry.id} delayDuration={100}>
@@ -182,7 +184,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                                         className="absolute top-1/2 -translate-x-1/2 cursor-pointer"
                                         style={{ 
                                             left: `${position}%`,
-                                            transform: `translate(calc(-50% + ${horizontalJitter}px), calc(-50% + ${verticalJitter}px))`,
+                                            transform: `translate(calc(-50% + ${horizontalJitterOffset}px), calc(-50% + ${verticalJitter}px))`,
                                         }}
                                     >
                                         <Icon className={`w-6 h-6 ${color} transition-transform duration-200 hover:scale-150 hover:drop-shadow-[0_0_8px]`} style={{'--tw-drop-shadow-color': 'hsl(var(--primary))'} as React.CSSProperties}/>
