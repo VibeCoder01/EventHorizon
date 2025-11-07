@@ -4,15 +4,26 @@ import type { LogEntry, EventLevel } from './types';
 
 // Regex patterns for various log formats
 const LOG_PATTERNS = [
-    // 1. Modern syslog format (e.g., 2025-11-03T13:29:39.442854+00:00 VC01A wekan.mongodb[1357]: message)
+    // 0. Modern syslog format with PID (e.g., from user-provided snippet)
     {
-        name: 'SYSLOG_MODERN',
+        name: 'SYSLOG_MODERN_V2',
         regex: /^([0-9T\:\.\-\+Z]+)\s+([\w\.\-]+)\s+([\w\.\-]+(?:\[\d+\])?):\s+(.*)$/,
         map: (parts: string[]): Partial<LogEntry> => ({
             timestamp: new Date(parts[1]),
-            level: 'Information', // Default level as it's not present in this format
-            source: parts[3].replace(/\[\d+\]/, ''), // Remove PID for cleaner source
+            level: 'Information',
+            source: parts[3].replace(/\[\d+\]/, ''),
             message: parts[4]
+        })
+    },
+    // 1. DPKG log format (e.g., 2025-11-03 23:04:18 startup archives unpack)
+    {
+        name: 'DPKG_LOG',
+        regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})\s+(.*)$/,
+        map: (parts: string[]): Partial<LogEntry> => ({
+            timestamp: new Date(parts[1]),
+            level: 'Information',
+            source: 'dpkg',
+            message: parts[2]
         })
     },
     // 2. RFC 5424 syslog format (e.g., <165>1 2003-10-11T22:14:15.003Z mymachine.example.com su - ID47 - message)
@@ -69,6 +80,17 @@ const LOG_PATTERNS = [
             level: mapGenericLevel(parts[2]),
             source: 'Application', // Default source
             message: parts[3]
+        })
+    },
+    // 7. Generic log with no timestamp (e.g. boot.log)
+    {
+        name: 'GENERIC_NO_TIMESTAMP',
+        regex: /^(.*)$/,
+        map: (parts: string[]): Partial<LogEntry> => ({
+            timestamp: new Date(), // Use current time as a fallback
+            level: 'Information',
+            source: 'boot',
+            message: parts[1]
         })
     }
 ];
