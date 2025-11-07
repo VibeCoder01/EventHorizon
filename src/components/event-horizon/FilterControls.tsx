@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import type { FilterState, EventLevel, EventSource } from "@/lib/types";
 
 interface FilterControlsProps {
@@ -10,9 +11,18 @@ interface FilterControlsProps {
   setFilters: (filters: FilterState) => void;
   allLevels: EventLevel[];
   allSources: EventSource[];
+  availableLevels: EventLevel[];
+  availableSources: EventSource[];
 }
 
-export function FilterControls({ filters, setFilters, allLevels, allSources }: FilterControlsProps) {
+export function FilterControls({ 
+    filters, 
+    setFilters, 
+    allLevels, 
+    allSources,
+    availableLevels,
+    availableSources,
+}: FilterControlsProps) {
     
     const handleLevelChange = (level: EventLevel, checked: boolean) => {
         const newLevels = checked
@@ -36,29 +46,53 @@ export function FilterControls({ filters, setFilters, allLevels, allSources }: F
       <CardContent className="space-y-6">
         <div className="space-y-3">
             <h4 className="font-semibold text-sm text-muted-foreground">By Level</h4>
-            {allLevels.map((level) => (
-                <div key={level} className="flex items-center space-x-3">
-                    <Checkbox 
-                        id={`level-${level}`} 
-                        checked={filters.levels.includes(level)}
-                        onCheckedChange={(checked) => handleLevelChange(level, !!checked)}
-                    />
-                    <Label htmlFor={`level-${level}`} className="font-normal text-foreground cursor-pointer">{level}</Label>
-                </div>
-            ))}
+            {allLevels.map((level) => {
+                const isAvailable = availableLevels.includes(level);
+                return (
+                    <div key={level} className="flex items-center space-x-3">
+                        <Checkbox 
+                            id={`level-${level}`} 
+                            checked={filters.levels.includes(level)}
+                            onCheckedChange={(checked) => handleLevelChange(level, !!checked)}
+                            disabled={!isAvailable}
+                        />
+                        <Label 
+                            htmlFor={`level-${level}`} 
+                            className={cn(
+                                "font-normal text-foreground",
+                                isAvailable ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground/50"
+                            )}
+                        >
+                            {level}
+                        </Label>
+                    </div>
+                );
+            })}
         </div>
         <div className="space-y-3">
             <h4 className="font-semibold text-sm text-muted-foreground">By Source</h4>
-            {allSources.map((source) => (
-                <div key={source} className="flex items-center space-x-3">
-                    <Checkbox 
-                        id={`source-${source}`}
-                        checked={filters.sources.includes(source)}
-                        onCheckedChange={(checked) => handleSourceChange(source, !!checked)}
-                    />
-                    <Label htmlFor={`source-${source}`} className="font-normal text-foreground cursor-pointer">{source}</Label>
-                </div>
-            ))}
+            {allSources.map((source) => {
+                 const isAvailable = availableSources.includes(source);
+                return (
+                    <div key={source} className="flex items-center space-x-3">
+                        <Checkbox 
+                            id={`source-${source}`}
+                            checked={filters.sources.includes(source)}
+                            onCheckedChange={(checked) => handleSourceChange(source, !!checked)}
+                            disabled={!isAvailable}
+                        />
+                        <Label 
+                            htmlFor={`source-${source}`} 
+                            className={cn(
+                                "font-normal text-foreground",
+                                isAvailable ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground/50"
+                            )}
+                        >
+                            {source}
+                        </Label>
+                    </div>
+                );
+            })}
         </div>
       </CardContent>
     </Card>

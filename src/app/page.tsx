@@ -22,11 +22,20 @@ export default function Home() {
     sources: [],
   });
   
-  const allSources = useMemo(() => {
-    if (!logEntries.length) return [];
+  const { availableSources, availableLevels } = useMemo(() => {
+    if (!logEntries.length) return { availableSources: [], availableLevels: [] };
     const sources = new Set(logEntries.map(entry => entry.source));
-    return Array.from(sources).sort();
+    const levels = new Set(logEntries.map(entry => entry.level));
+    return { 
+      availableSources: Array.from(sources).sort(),
+      availableLevels: Array.from(levels)
+    };
   }, [logEntries]);
+
+  const allPossibleSources = useMemo(() => {
+    if (!logEntries.length) return [];
+    return availableSources;
+  }, [availableSources]);
 
   const handleLogsParsed = (logs: LogEntry[]) => {
     setLogEntries(logs);
@@ -80,7 +89,9 @@ export default function Home() {
                         filters={filters}
                         setFilters={setFiltersCallback}
                         allLevels={ALL_LEVELS}
-                        allSources={allSources}
+                        allSources={allPossibleSources}
+                        availableLevels={availableLevels}
+                        availableSources={availableSources}
                      />
                 </div>
                 <div className="md:col-span-3">
