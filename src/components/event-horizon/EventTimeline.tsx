@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useCallback } from "react";
 import { format } from "date-fns";
 import type { LogEntry, EventLevel } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, AlertTriangle, XCircle, AlertOctagon, FileText, Bug, Bell, ShieldAlert, Siren } from "lucide-react";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Info, AlertTriangle, XCircle, AlertOctagon, FileText, Bug, Bell, ShieldAlert, Siren, ZoomIn, ZoomOut, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface EventTimelineProps {
   entries: LogEntry[];
@@ -33,6 +33,10 @@ const pseudoRandom = (seed: number) => {
 };
 
 export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [isPanning, setIsPanning] = useState(false);
+  const timelineRef = useRef<HTMLDivElement>(null);
+
   const { minTime, maxTime } = useMemo(() => {
     if (allEntries.length === 0) {
       return { minTime: 0, maxTime: 0 };
@@ -51,6 +55,39 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
     return ((new Date(timestamp).getTime() - minTime) / timeRange) * 100;
   };
   
+  const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const zoomFactor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
+    setZoomLevel(prev => Math.max(1, Math.min(prev * zoomFactor, 100)));
+  }, []);
+
+  const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    setIsPanning(true);
+    if(timelineRef.current) {
+        timelineRef.current.style.cursor = 'grabbing';
+    }
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+     if(timelineRef.current) {
+        timelineRef.current.style.cursor = 'grab';
+    }
+  }, []);
+
+  const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (isPanning && timelineRef.current) {
+      timelineRef.current.scrollLeft -= event.movementX;
+    }
+  }, [isPanning]);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsPanning(false);
+     if(timelineRef.current) {
+        timelineRef.current.style.cursor = 'grab';
+    }
+  }, []);
+
   if (allEntries.length === 0) {
     return (
         <Card className="h-full bg-card/50 flex items-center justify-center">
@@ -62,17 +99,37 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
   }
 
   return (
-    <Card className="h-full bg-card/50">
+    <Card className="h-[600px] bg-card/50 flex flex-col">
       <CardHeader>
-        <CardTitle className="text-lg">Event Timeline</CardTitle>
-        <CardDescription>
-            Visual representation of events over time. Hover for details.
-        </CardDescription>
+        <div className="flex justify-between items-center">
+          <div>
+            <CardTitle className="text-lg">Event Timeline</CardTitle>
+            <CardDescription>
+                Visual representation of events over time. Pan and zoom for details.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setZoomLevel(p => Math.max(1, p / 1.2))}><ZoomOut className="w-4 h-4" /></Button>
+            <Button variant="outline" size="sm" onClick={() => setZoomLevel(p => Math.min(100, p * 1.2))}><ZoomIn className="w-4 h-4" /></Button>
+            <Button variant="outline" size="sm" onClick={() => setZoomLevel(1)}><Search className="w-4 h-4 mr-2" />Reset</Button>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="pt-4 pb-8">
+      <CardContent className="pt-4 pb-8 flex-grow overflow-hidden">
         <TooltipProvider>
-            <ScrollArea className="w-full whitespace-nowrap">
-                <div className="relative w-full h-[500px] flex items-center px-4">
+            <div 
+              ref={timelineRef}
+              className="w-full h-full overflow-auto relative cursor-grab"
+              onWheel={handleWheel}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+            >
+                <div 
+                    className="relative h-full"
+                    style={{ width: `${100 * zoomLevel}%` }}
+                >
                     <div className="absolute top-1/2 left-0 w-full h-0.5 bg-secondary -translate-y-1/2" />
                     
                     {entries.map((entry) => {
@@ -80,7 +137,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                         const Icon = config.icon;
                         const color = config.color;
                         const position = getPosition(entry.timestamp);
-                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * 480;
+                        const verticalJitter = (pseudoRandom(entry.id) - 0.5) * 580;
 
                         return (
                             <Tooltip key={entry.id} delayDuration={100}>
@@ -107,8 +164,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                      <div className="absolute top-full text-xs text-muted-foreground left-0">{minTime ? format(new Date(minTime), "HH:mm") : ''}</div>
                      <div className="absolute top-full text-xs text-muted-foreground right-0">{maxTime ? format(new Date(maxTime), "HH:mm") : ''}</div>
                 </div>
-                <ScrollBar orientation="horizontal" />
-            </ScrollArea>
+            </div>
         </TooltipProvider>
       </CardContent>
     </Card>
