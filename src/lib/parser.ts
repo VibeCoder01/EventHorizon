@@ -8,7 +8,7 @@ const LOG_PATTERNS = [
     {
         name: 'SYSLOG_MODERN_V2',
         regex: /^([0-9T\:\.\-\+Z]+)\s+([\w\.\-]+)\s+([\w\.\-]+(?:\[\d+\])?):\s+(.*)$/,
-        map: (parts: string[]): Partial<LogEntry> => ({
+        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[1]),
             level: inferLevelFromMessage(parts[4]),
             source: parts[3].replace(/\[\d+\]/, ''),
@@ -19,7 +19,7 @@ const LOG_PATTERNS = [
     {
         name: 'DPKG_LOG',
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})\s+(.*)$/,
-        map: (parts: string[]): Partial<LogEntry> => ({
+        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[1]),
             level: inferLevelFromMessage(parts[2]),
             source: 'dpkg',
@@ -30,7 +30,7 @@ const LOG_PATTERNS = [
     {
         name: 'RFC_5424',
         regex: /^\<(\d+)\>1\s+([0-9T\:\.\-\+Z]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+(.*)$/,
-        map: (parts: string[]): Partial<LogEntry> => ({
+        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[2]),
             level: getLevelFromSyslogPriority(parseInt(parts[1], 10)),
             source: parts[4],
@@ -41,7 +41,7 @@ const LOG_PATTERNS = [
     {
         name: 'RFC_3164',
         regex: /^\<(\d+)\>([A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+([\w\.\-]+)\s+([^:]+):\s+(.*)$/,
-        map: (parts: string[]): Partial<LogEntry> => ({
+        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: robustDateParse(parts[2]),
             level: getLevelFromSyslogPriority(parseInt(parts[1], 10)),
             source: parts[4].trim(),
@@ -53,7 +53,7 @@ const LOG_PATTERNS = [
     {
         name: 'WINDOWS_CSV',
         regex: /^"?([^"]+)"?,"?([0-9\/\s:AMP]+)"?,"?([^"]+)"?,"?\d+"?,"?[^"]*"?,"?([^"]+)"?.*$/,
-        map: (parts: string[]): Partial<LogEntry> => ({
+        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             level: mapWindowsLevel(parts[1] as EventLevel | 'Information'),
             timestamp: new Date(parts[2]),
             source: parts[3],
@@ -64,7 +64,7 @@ const LOG_PATTERNS = [
     {
         name: 'APP_LOG_1',
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}(?:,\d{3})?)\s+([A-Z]+)\s+\[([^\]]+)\]\s+(.*)$/,
-        map: (parts: string[]): Partial<LogEntry> => ({
+        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[1].replace(',', '.')),
             level: mapGenericLevel(parts[2]),
             source: parts[3],
@@ -75,7 +75,7 @@ const LOG_PATTERNS = [
     {
         name: 'ISO_WITH_LEVEL',
         regex: /^([0-9T\:\.\-\+Z]+)\s+\[([A-Z]+)\]\s+(.*)$/,
-        map: (parts: string[]): Partial<LogEntry> => ({
+        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[1]),
             level: mapGenericLevel(parts[2]),
             source: 'Application', // Default source
@@ -157,18 +157,18 @@ function mapWindowsLevel(level: string): EventLevel {
 /**
  * Parses a raw log file content using regular expressions.
  * @param fileContent The raw string content of the log file.
+ * @param filename The name of the file being parsed.
  * @returns A promise that resolves to an array of structured LogEntry objects.
  */
-export async function parseLogFile(fileContent: string): Promise<LogEntry[]> {
+export async function parseLogFile(fileContent: string, filename: string): Promise<Omit<LogEntry, 'id'>[]> {
     if (!fileContent.trim()) {
         throw new Error("The uploaded file is empty or contains only whitespace.");
     }
 
     const lines = fileContent.split(/\r?\n/);
-    const parsedLogs: LogEntry[] = [];
+    const parsedLogs: Omit<LogEntry, 'id'>[] = [];
     const fallbackTimestamp = new Date();
-    let idCounter = 0;
-
+    
     let successfulParses = 0;
     for (const line of lines) {
         if (!line.trim()) continue;
@@ -181,7 +181,7 @@ export async function parseLogFile(fileContent: string): Promise<LogEntry[]> {
                     const partialEntry = pattern.map(match);
                     if (partialEntry.timestamp && !isNaN(partialEntry.timestamp.getTime())) {
                         parsedLogs.push({
-                            id: idCounter++,
+                            filename,
                             timestamp: partialEntry.timestamp,
                             level: partialEntry.level || 'Information',
                             source: partialEntry.source || 'Unknown',
@@ -199,7 +199,7 @@ export async function parseLogFile(fileContent: string): Promise<LogEntry[]> {
         if (!entryParsed) {
             // Fallback for lines that don't match any pattern with a timestamp
              parsedLogs.push({
-                id: idCounter++,
+                filename,
                 timestamp: fallbackTimestamp,
                 level: inferLevelFromMessage(line),
                 source: 'Unknown',

@@ -7,9 +7,15 @@ export interface LogEntry {
   level: EventLevel;
   source: string;
   message: string;
+  filename: string;
 }
 
 export interface FilterState {
   levels: EventLevel[];
   sources: EventSource[];
 }
+
+export type SourceGroup = {
+  filename: string;
+  sources: EventSource[];
+};

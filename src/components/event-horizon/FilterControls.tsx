@@ -4,25 +4,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { FilterState, EventLevel, EventSource } from "@/lib/types";
+import type { FilterState, EventLevel, EventSource, SourceGroup, LogEntry } from "@/lib/types";
 import { ScrollArea } from "../ui/scroll-area";
+import { AddLogFile } from "./AddLogFile";
+import { parseLogFile } from "@/lib/parser";
 
 interface FilterControlsProps {
   filters: FilterState;
   setFilters: (filters: FilterState) => void;
   allLevels: EventLevel[];
-  allSources: EventSource[];
   availableLevels: EventLevel[];
-  availableSources: EventSource[];
+  groupedSources: SourceGroup[];
+  onLogsParsed: (logs: Omit<LogEntry, 'id'>[]) => void;
+  onError: (errorMessage: string) => void;
 }
 
 export function FilterControls({ 
     filters, 
     setFilters, 
     allLevels, 
-    allSources,
     availableLevels,
-    availableSources,
+    groupedSources,
+    onLogsParsed,
+    onError
 }: FilterControlsProps) {
     
     const handleLevelChange = (level: EventLevel, checked: boolean) => {
@@ -38,11 +42,14 @@ export function FilterControls({
             : filters.sources.filter(s => s !== source);
         setFilters({ ...filters, sources: newSources });
     };
+
+    const allAvailableSources = groupedSources.flatMap(g => g.sources);
     
   return (
     <Card className="h-full bg-card/50">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg">Filter Events</CardTitle>
+        <AddLogFile onLogsParsed={onLogsParsed} onError={onError} parser={parseLogFile} />
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[480px]">
@@ -74,28 +81,38 @@ export function FilterControls({
             </div>
             <div className="space-y-3">
                 <h4 className="font-semibold text-sm text-muted-foreground">By Source</h4>
-                {allSources.map((source) => {
-                    const isAvailable = availableSources.includes(source);
-                    return (
-                        <div key={source} className="flex items-center space-x-3">
-                            <Checkbox 
-                                id={`source-${source}`}
-                                checked={filters.sources.includes(source)}
-                                onCheckedChange={(checked) => handleSourceChange(source, !!checked)}
-                                disabled={!isAvailable}
-                            />
-                            <Label 
-                                htmlFor={`source-${source}`} 
-                                className={cn(
-                                    "font-normal text-foreground",
-                                    isAvailable ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground/50"
-                                )}
-                            >
-                                {source}
-                            </Label>
+                {groupedSources.length === 0 && (
+                     <p className="text-xs text-muted-foreground">No sources found.</p>
+                )}
+                {groupedSources.map((group) => (
+                    <div key={group.filename} className="space-y-2">
+                        <p className="font-medium text-xs text-foreground truncate" title={group.filename}>{group.filename}</p>
+                        <div className="pl-2 space-y-2">
+                            {group.sources.map((source) => {
+                                const isAvailable = allAvailableSources.includes(source);
+                                return (
+                                    <div key={source} className="flex items-center space-x-3">
+                                        <Checkbox 
+                                            id={`source-${group.filename}-${source}`}
+                                            checked={filters.sources.includes(source)}
+                                            onCheckedChange={(checked) => handleSourceChange(source, !!checked)}
+                                            disabled={!isAvailable}
+                                        />
+                                        <Label 
+                                            htmlFor={`source-${group.filename}-${source}`} 
+                                            className={cn(
+                                                "font-normal text-foreground",
+                                                isAvailable ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground/50"
+                                            )}
+                                        >
+                                            {source}
+                                        </Label>
+                                    </div>
+                                );
+                            })}
                         </div>
-                    );
-                })}
+                    </div>
+                ))}
             </div>
           </div>
         </ScrollArea>

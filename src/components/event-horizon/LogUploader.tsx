@@ -6,9 +6,9 @@ import { Upload, FileText, Loader2, Info } from "lucide-react";
 import type { LogEntry } from "@/lib/types";
 
 interface LogUploaderProps {
-  onLogsParsed: (logs: LogEntry[]) => void;
+  onLogsParsed: (logs: Omit<LogEntry, 'id'>[]) => void;
   onError: (errorMessage: string) => void;
-  parser: (fileContent: string) => Promise<LogEntry[]>;
+  parser: (fileContent: string, filename: string) => Promise<Omit<LogEntry, 'id'>[]>;
 }
 
 export function LogUploader({ onLogsParsed, onError, parser }: LogUploaderProps) {
@@ -25,7 +25,7 @@ export function LogUploader({ onLogsParsed, onError, parser }: LogUploaderProps)
         if (!content) {
             throw new Error("File is empty.");
         }
-        const parsedLogs = await parser(content);
+        const parsedLogs = await parser(content, file.name);
         onLogsParsed(parsedLogs.sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
       } catch (error) {
         const message = error instanceof Error ? error.message : "An unknown error occurred during parsing.";

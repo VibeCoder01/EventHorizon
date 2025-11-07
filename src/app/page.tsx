@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import type { LogEntry, FilterState, EventLevel, EventSource } from "@/lib/types";
+import type { LogEntry, FilterState, EventLevel, EventSource, SourceGroup } from "@/lib/types";
 import { EventHorizonHeader } from "@/components/event-horizon/EventHorizonHeader";
 import { LogUploader } from "@/components/event-horizon/LogUploader";
 import { FilterControls } from "@/components/event-horizon/FilterControls";
@@ -11,7 +11,6 @@ import { SignificantFindings } from "@/components/event-horizon/SignificantFindi
 import { useToast } from "@/hooks/use-toast";
 import { parseLogFile } from "@/lib/parser";
 import { LogSourceHints } from "@/components/event-horizon/LogSourceHints";
-import { AddLogFile } from "@/components/event-horizon/AddLogFile";
 
 const ALL_LEVELS: EventLevel[] = ['Information', 'Warning', 'Error', 'Critical', 'Verbose', 'Debug', 'Notice', 'Emergency', 'Alert'];
 
@@ -24,22 +23,30 @@ export default function Home() {
   });
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   
-  const { availableSources, availableLevels } = useMemo(() => {
-    if (!logEntries.length) return { availableSources: [], availableLevels: [] };
-    const sources = new Set(logEntries.map(entry => entry.source));
+  const { availableLevels, groupedSources } = useMemo(() => {
+    if (!logEntries.length) return { availableLevels: [], groupedSources: [] };
+
     const levels = new Set(logEntries.map(entry => entry.level));
+    const sourcesByFile = logEntries.reduce((acc, entry) => {
+        if (!acc[entry.filename]) {
+            acc[entry.filename] = new Set<EventSource>();
+        }
+        acc[entry.filename].add(entry.source);
+        return acc;
+    }, {} as Record<string, Set<EventSource>>);
+
+    const grouped: SourceGroup[] = Object.entries(sourcesByFile).map(([filename, sourcesSet]) => ({
+        filename,
+        sources: Array.from(sourcesSet).sort()
+    })).sort((a, b) => a.filename.localeCompare(b.filename));
+
     return { 
-      availableSources: Array.from(sources).sort(),
-      availableLevels: Array.from(levels)
+      availableLevels: Array.from(levels),
+      groupedSources: grouped,
     };
   }, [logEntries]);
 
-  const allPossibleSources = useMemo(() => {
-    if (!logEntries.length) return [];
-    return availableSources;
-  }, [availableSources]);
-
-  const handleLogsParsed = (newLogs: LogEntry[]) => {
+  const handleLogsParsed = (newLogs: Omit<LogEntry, 'id'>[]) => {
     const lastId = logEntries.length > 0 ? logEntries[logEntries.length - 1].id : -1;
     const logsWithUniqueIds = newLogs.map((log, index) => ({
       ...log,
@@ -92,6 +99,15 @@ export default function Home() {
   const handleEventSelect = useCallback((eventId: number | null) => {
     setSelectedEventId(eventId);
   }, []);
+  
+  const onLogsParsedCallback = useCallback((logs: Omit<LogEntry, 'id'>[]) => {
+    handleLogsParsed(logs);
+  }, [logEntries]);
+
+  const onErrorCallback = useCallback((error: string) => {
+    handleError(error);
+  }, []);
+
 
   return (
     <main className="container mx-auto px-4 py-8">
@@ -111,11 +127,11 @@ export default function Home() {
                         filters={filters}
                         setFilters={setFiltersCallback}
                         allLevels={ALL_LEVELS}
-                        allSources={allPossibleSources}
                         availableLevels={availableLevels}
-                        availableSources={availableSources}
+                        groupedSources={groupedSources}
+                        onLogsParsed={onLogsParsedCallback}
+                        onError={onErrorCallback}
                      />
-                     <AddLogFile onLogsParsed={handleLogsParsed} onError={handleError} parser={parseLogFile} />
                 </div>
                 <div className="md:col-span-3">
                     <EventTimeline 

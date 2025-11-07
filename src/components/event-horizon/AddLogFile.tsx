@@ -15,15 +15,15 @@ import {
 import type { LogEntry } from "@/lib/types";
 
 interface AddLogFileProps {
-  onLogsParsed: (logs: LogEntry[]) => void;
+  onLogsParsed: (logs: Omit<LogEntry, 'id'>[]) => void;
   onError: (errorMessage: string) => void;
-  parser: (fileContent: string) => Promise<LogEntry[]>;
+  parser: (fileContent: string, filename: string) => Promise<Omit<LogEntry, 'id'>[]>;
 }
 
 export function AddLogFile({ onLogsParsed, onError, parser }: AddLogFileProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const handleLogs = (logs: LogEntry[]) => {
+  const handleLogs = (logs: Omit<LogEntry, 'id'>[]) => {
     onLogsParsed(logs);
     setIsOpen(false);
   };
@@ -36,9 +36,9 @@ export function AddLogFile({ onLogsParsed, onError, parser }: AddLogFileProps) {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="w-full">
+        <Button variant="ghost" size="sm">
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add another log file
+          Add Log
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[625px]">
