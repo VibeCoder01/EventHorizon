@@ -1,22 +1,23 @@
-
-
 "use client";
 
-import { useMemo, useState, useRef, useCallback } from "react";
+import { useMemo, useState, useRef, useCallback, useEffect } from "react";
 import { format } from "date-fns";
 import type { LogEntry, EventLevel } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, AlertTriangle, XCircle, AlertOctagon, FileText, Bug, Bell, ShieldAlert, Siren, ZoomIn, ZoomOut, Search, SlidersHorizontal } from "lucide-react";
+import { Info, AlertTriangle, XCircle, AlertOctagon, FileText, Bug, Bell, ShieldAlert, Siren, ZoomIn, ZoomOut, Search, SlidersHorizontal, LocateFixed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 
 interface EventTimelineProps {
   entries: LogEntry[];
   allEntries: LogEntry[];
+  selectedEvent: LogEntry | null;
+  onEventSelect: (eventId: number | null) => void;
 }
 
 const levelConfig: Record<EventLevel, { icon: React.ElementType, color: string }> = {
@@ -31,15 +32,14 @@ const levelConfig: Record<EventLevel, { icon: React.ElementType, color: string }
     'Alert': { icon: ShieldAlert, color: 'text-pink-500' },
 };
 
-const MAX_VERTICAL_JITTER = 250; // Constant max vertical spread
+const MAX_VERTICAL_JITTER = 250; 
 
-// Simple pseudo-random generator to have deterministic jitter based on entry ID
 const pseudoRandom = (seed: number) => {
     let x = Math.sin(seed) * 10000;
     return x - Math.floor(x);
 };
 
-export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
+export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelect }: EventTimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -62,6 +62,26 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
     if (timeRange === 0) return 50;
     return ((new Date(timestamp).getTime() - minTime) / timeRange) * 100;
   }, [minTime, timeRange]);
+
+  // Center on selected event
+  useEffect(() => {
+    if (selectedEvent && timelineRef.current && timeRange > 0) {
+      const positionPercent = getPosition(selectedEvent.timestamp);
+      
+      const newZoomLevel = Math.max(zoomLevel, 5); // Zoom in a bit if not already
+      if (newZoomLevel !== zoomLevel) {
+        setZoomLevel(newZoomLevel);
+      }
+
+      requestAnimationFrame(() => {
+        if (timelineRef.current) {
+          const timelineWidth = timelineRef.current.scrollWidth;
+          const targetScrollLeft = (positionPercent / 100) * timelineWidth - (timelineRef.current.clientWidth / 2);
+          timelineRef.current.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
+        }
+      });
+    }
+  }, [selectedEvent, getPosition, zoomLevel, timeRange]);
   
   const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -70,11 +90,19 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
   }, []);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    // If clicking on an icon, let the icon's handler take over
+    if ((event.target as HTMLElement).closest('[data-event-id]')) {
+      return;
+    }
+    
+    // Clear selection if clicking on background
+    onEventSelect(null);
+
     setIsPanning(true);
     if(timelineRef.current) {
         timelineRef.current.style.cursor = 'grabbing';
     }
-  }, []);
+  }, [onEventSelect]);
 
   const handleMouseUp = useCallback(() => {
     setIsPanning(false);
@@ -102,33 +130,23 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
     const rect = timelineRef.current.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     
-    // Calculate the percentage position of the click within the visible area
     const clickPercentInView = clickX / rect.width;
     
-    // Calculate the overall scroll position in the zoomed timeline
     const currentScrollLeft = timelineRef.current.scrollLeft;
     const totalWidth = rect.width * zoomLevel;
 
-    // The position of the click in the total timeline content (in pixels)
     const clickPositionInTotal = currentScrollLeft + clickX;
     
-    // The position of the click as a percentage of the total timeline
     const clickTimePercent = clickPositionInTotal / totalWidth;
 
     const newZoomLevel = Math.min(100, zoomLevel * 2);
 
     setZoomLevel(newZoomLevel);
     
-    // After zoom, the new total width changes
-    const newTotalWidth = rect.width * newZoomLevel;
-    
-    // We want the click point to be the new center.
-    // The new scrollLeft should be the click's position in the new total width minus half the viewport width.
-    const newScrollLeft = (clickTimePercent * newTotalWidth) - (rect.width / 2);
-    
-    // Use requestAnimationFrame to ensure the scroll happens after the new zoom level is applied
     requestAnimationFrame(() => {
         if(timelineRef.current) {
+            const newTotalWidth = rect.width * newZoomLevel;
+            const newScrollLeft = (clickTimePercent * newTotalWidth) - (rect.width / 2);
             timelineRef.current.scrollLeft = newScrollLeft;
         }
     });
@@ -141,11 +159,9 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
     const { scrollLeft, clientWidth } = timelineRef.current;
     const timelineWidth = clientWidth * zoomLevel;
 
-    // Calculate the visible percentage range of the timeline
     const startPercent = (scrollLeft / timelineWidth) * 100;
     const endPercent = ((scrollLeft + clientWidth) / timelineWidth) * 100;
 
-    // Add a buffer to render items slightly outside the viewport
     const buffer = 10; 
     const bufferedStart = Math.max(0, startPercent - buffer);
     const bufferedEnd = Math.min(100, endPercent + buffer);
@@ -236,6 +252,7 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                         const Icon = config.icon;
                         const color = config.color;
                         const position = getPosition(entry.timestamp);
+                        const isSelected = selectedEvent?.id === entry.id;
                         
                         const verticalJitter = (pseudoRandom(entry.id) - 0.5) * MAX_VERTICAL_JITTER;
                         const horizontalJitterOffset = (pseudoRandom(entry.id * 3) - 0.5) * horizontalJitter;
@@ -244,13 +261,23 @@ export function EventTimeline({ entries, allEntries }: EventTimelineProps) {
                             <Tooltip key={entry.id} delayDuration={100}>
                                 <TooltipTrigger asChild>
                                     <div 
+                                        data-event-id={entry.id}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onEventSelect(isSelected ? null : entry.id);
+                                        }}
                                         className="absolute top-1/2 -translate-x-1/2 cursor-pointer"
                                         style={{ 
                                             left: `${position}%`,
                                             transform: `translate(calc(-50% + ${horizontalJitterOffset}px), calc(-50% + ${verticalJitter}px))`,
+                                            zIndex: isSelected ? 10 : 1,
                                         }}
                                     >
-                                        <Icon className={`w-6 h-6 ${color} transition-transform duration-200 hover:scale-150 hover:drop-shadow-[0_0_8px]`} style={{'--tw-drop-shadow-color': 'hsl(var(--primary))'} as React.CSSProperties}/>
+                                        <Icon className={cn(`w-6 h-6 ${color} transition-transform duration-200 hover:scale-150`, {
+                                          "scale-150 drop-shadow-[0_0_12px]": isSelected
+                                        })} 
+                                        style={{'--tw-drop-shadow-color': 'hsl(var(--primary))'} as React.CSSProperties}/>
+                                        {isSelected && <LocateFixed className="absolute -top-1 -right-1 w-4 h-4 text-primary bg-background rounded-full" />}
                                     </div>
                                 </TooltipTrigger>
                                 <TooltipContent className="bg-popover text-popover-foreground border-border">

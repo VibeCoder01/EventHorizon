@@ -13,9 +13,12 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 interface EventTableProps {
   entries: LogEntry[];
+  selectedEventId: number | null;
+  onEventSelect: (eventId: number | null) => void;
 }
 
 const levelColors: Record<EventLevel, string> = {
@@ -30,13 +33,13 @@ const levelColors: Record<EventLevel, string> = {
     'Alert': 'bg-pink-800/50 text-pink-200 border-pink-500/30',
 };
 
-export function EventTable({ entries }: EventTableProps) {
+export function EventTable({ entries, selectedEventId, onEventSelect }: EventTableProps) {
   return (
     <Card className="bg-card/50">
       <CardHeader>
         <CardTitle>Detailed Event Log</CardTitle>
         <CardDescription>
-          A list of all filtered events. Found {entries.length} {entries.length === 1 ? 'entry' : 'entries'}.
+          A list of all filtered events. Click a row to focus on the timeline. Found {entries.length} {entries.length === 1 ? 'entry' : 'entries'}.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -53,7 +56,13 @@ export function EventTable({ entries }: EventTableProps) {
             <TableBody>
               {entries.length > 0 ? (
                 entries.map((entry) => (
-                  <TableRow key={entry.id}>
+                  <TableRow 
+                    key={entry.id}
+                    onClick={() => onEventSelect(entry.id === selectedEventId ? null : entry.id)}
+                    className={cn("cursor-pointer", {
+                      "bg-primary/20 hover:bg-primary/30": entry.id === selectedEventId,
+                    })}
+                    >
                     <TableCell>
                       <Badge variant="outline" className={`${levelColors[entry.level]} font-semibold`}>{entry.level}</Badge>
                     </TableCell>

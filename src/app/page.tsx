@@ -21,6 +21,7 @@ export default function Home() {
     levels: [],
     sources: [],
   });
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   
   const { availableSources, availableLevels } = useMemo(() => {
     if (!logEntries.length) return { availableSources: [], availableLevels: [] };
@@ -56,6 +57,7 @@ export default function Home() {
   const handleReset = () => {
     setLogEntries([]);
     setFilters({ levels: [], sources: [] });
+    setSelectedEventId(null);
   }
 
   const filteredEntries = useMemo(() => {
@@ -67,8 +69,17 @@ export default function Home() {
     });
   }, [logEntries, filters]);
 
+  const selectedEvent = useMemo(() => {
+    if (selectedEventId === null) return null;
+    return logEntries.find(e => e.id === selectedEventId) ?? null;
+  }, [selectedEventId, logEntries]);
+
   const setFiltersCallback = useCallback((newFilters: FilterState) => {
     setFilters(newFilters);
+  }, []);
+
+  const handleEventSelect = useCallback((eventId: number | null) => {
+    setSelectedEventId(eventId);
   }, []);
 
   return (
@@ -95,13 +106,22 @@ export default function Home() {
                      />
                 </div>
                 <div className="md:col-span-3">
-                    <EventTimeline entries={filteredEntries} allEntries={logEntries}/>
+                    <EventTimeline 
+                        entries={filteredEntries} 
+                        allEntries={logEntries}
+                        selectedEvent={selectedEvent}
+                        onEventSelect={handleEventSelect}
+                    />
                 </div>
              </div>
           </section>
 
           <section id="event-list">
-            <EventTable entries={filteredEntries} />
+            <EventTable 
+                entries={filteredEntries} 
+                selectedEventId={selectedEventId}
+                onEventSelect={handleEventSelect}
+            />
           </section>
 
           <section id="summary">
