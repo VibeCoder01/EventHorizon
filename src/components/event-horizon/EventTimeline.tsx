@@ -44,6 +44,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const [isPanning, setIsPanning] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [horizontalJitter, setHorizontalJitter] = useState(20);
+  const [selectionBox, setSelectionBox] = useState<{ startX: number; endX: number } | null>(null);
 
   const { minTime, maxTime } = useMemo(() => {
     if (allEntries.length === 0) {
@@ -84,12 +85,22 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   }, [selectedEvent, getPosition, zoomLevel, timeRange]);
   
   const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const zoomFactor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
-    setZoomLevel(prev => Math.max(1, Math.min(prev * zoomFactor, 100)));
+    if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        const zoomFactor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
+        setZoomLevel(prev => Math.max(1, Math.min(prev * zoomFactor, 100)));
+    } else {
+        if (timelineRef.current) {
+            timelineRef.current.scrollLeft += event.deltaY;
+        }
+    }
   }, []);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.shiftKey) {
+        setSelectionBox({ startX: event.clientX, endX: event.clientX });
+        return;
+    }
     // If clicking on an icon, let the icon's handler take over
     if ((event.target as HTMLElement).closest('[data-event-id]')) {
       return;
@@ -104,21 +115,51 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     }
   }, [onEventSelect]);
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (selectionBox && timelineRef.current) {
+        const rect = timelineRef.current.getBoundingClientRect();
+        const startX = Math.min(selectionBox.startX, selectionBox.endX) - rect.left;
+        const endX = Math.max(selectionBox.startX, selectionBox.endX) - rect.left;
+
+        if (Math.abs(endX - startX) > 10) { // minimum drag distance
+            const currentScrollLeft = timelineRef.current.scrollLeft;
+            const totalWidth = rect.width * zoomLevel;
+
+            const startPercent = (currentScrollLeft + startX) / totalWidth;
+            const endPercent = (currentScrollLeft + endX) / totalWidth;
+
+            const newZoomLevel = Math.min(100, zoomLevel * (1 / (endPercent - startPercent)));
+            setZoomLevel(newZoomLevel);
+
+            requestAnimationFrame(() => {
+                if (timelineRef.current) {
+                    const newTotalWidth = rect.width * newZoomLevel;
+                    const newScrollLeft = (startPercent * newTotalWidth);
+                    timelineRef.current.scrollLeft = newScrollLeft;
+                }
+            });
+        }
+    }
+    
     setIsPanning(false);
+    setSelectionBox(null);
      if(timelineRef.current) {
         timelineRef.current.style.cursor = 'grab';
     }
-  }, []);
+  }, [selectionBox, zoomLevel]);
 
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (selectionBox) {
+        setSelectionBox({ ...selectionBox, endX: event.clientX });
+    }
     if (isPanning && timelineRef.current) {
       timelineRef.current.scrollLeft -= event.movementX;
     }
-  }, [isPanning]);
+  }, [isPanning, selectionBox]);
 
   const handleMouseLeave = useCallback(() => {
     setIsPanning(false);
+    setSelectionBox(null);
      if(timelineRef.current) {
         timelineRef.current.style.cursor = 'grab';
     }
@@ -186,20 +227,31 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   return (
     <Card className="h-[600px] bg-card/50 flex flex-col">
       <CardHeader>
-        <div className="flex justify-between items-start">
-          <div>
+        <div className="flex justify-between items-center gap-4">
+          <div className="flex-shrink-0">
             <CardTitle className="text-lg">Event Timeline</CardTitle>
-            <CardDescription>
-                Visual representation of events over time. Pan and zoom for details.
+            <CardDescription className="text-xs md:text-sm">
+                Pan, Shift+Drag or Dbl-Click to zoom.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setZoomLevel(p => Math.max(1, p / 1.2))}><ZoomOut className="w-4 h-4" /></Button>
-            <Button variant="outline" size="sm" onClick={() => setZoomLevel(p => Math.min(100, p * 1.2))}><ZoomIn className="w-4 h-4" /></Button>
-            <Button variant="outline" size="sm" onClick={() => setZoomLevel(1)}><Search className="w-4 h-4 mr-2" />Reset</Button>
+          <div className="flex items-center gap-4 flex-grow">
+            <div className="flex items-center gap-2 flex-grow">
+              <ZoomOut className="w-4 h-4 text-muted-foreground" />
+              <Slider
+                  aria-label="Zoom level"
+                  value={[zoomLevel]}
+                  onValueChange={(value) => setZoomLevel(value[0])}
+                  min={1}
+                  max={100}
+                  step={1}
+                  className="w-full"
+              />
+              <ZoomIn className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setZoomLevel(1)}><Search className="w-4 h-4 mr-0 md:mr-2" /><span className="hidden md:inline">Reset</span></Button>
             <Popover>
                 <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm"><SlidersHorizontal className="w-4 h-4" /></Button>
+                    <Button variant="outline" size="icon"><SlidersHorizontal className="w-4 h-4" /></Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-56 p-4">
                     <div className="grid gap-4">
@@ -246,6 +298,16 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                     style={{ width: `${100 * zoomLevel}%` }}
                 >
                     <div className="absolute top-1/2 left-0 w-full h-0.5 bg-secondary -translate-y-1/2" />
+
+                    {selectionBox && timelineRef.current && (
+                        <div
+                            className="absolute top-0 h-full bg-primary/20 border-2 border-primary"
+                            style={{
+                                left: `${Math.min(selectionBox.startX, selectionBox.endX) - timelineRef.current.getBoundingClientRect().left}px`,
+                                width: `${Math.abs(selectionBox.endX - selectionBox.startX)}px`,
+                            }}
+                        />
+                    )}
                     
                     {visibleEntries.map((entry) => {
                         const config = levelConfig[entry.level] || levelConfig['Information'];
