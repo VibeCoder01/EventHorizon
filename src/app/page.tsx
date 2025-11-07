@@ -10,6 +10,7 @@ import { EventTable } from "@/components/event-horizon/EventTable";
 import { SignificantFindings } from "@/components/event-horizon/SignificantFindings";
 import { useToast } from "@/hooks/use-toast";
 import { parseLogFile } from "@/lib/parser";
+import { LogSourceHints } from "@/components/event-horizon/LogSourceHints";
 
 const ALL_LEVELS: EventLevel[] = ['Information', 'Warning', 'Error', 'Critical', 'Verbose', 'Debug', 'Notice', 'Emergency', 'Alert'];
 
@@ -68,6 +69,7 @@ export default function Home() {
       {logEntries.length === 0 ? (
         <div className="mt-16 text-center">
           <LogUploader onLogsParsed={handleLogsParsed} onError={handleError} parser={parseLogFile} />
+          <LogSourceHints />
         </div>
       ) : (
         <div className="mt-8 grid grid-cols-1 gap-8">
