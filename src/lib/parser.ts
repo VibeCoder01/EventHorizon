@@ -94,6 +94,17 @@ const LOG_PATTERNS = [
             message: parts[4]
         })
     },
+    // 8. cloud-init.log format (e.g., 2025-08-28 21:21:33,170 - log_util.py[DEBUG]: message)
+    {
+        name: 'CLOUD_INIT_LOG',
+        regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d{3})\s+-\s+([\w\.\-]+)\[([A-Z]+)\]:\s+(.*)$/,
+        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+            timestamp: new Date(parts[1].replace(',', '.')),
+            source: parts[2],
+            level: mapGenericLevel(parts[3]),
+            message: parts[4]
+        })
+    },
 ];
 
 // Infer level from message content for logs that don't specify a level
