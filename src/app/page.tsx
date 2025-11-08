@@ -20,6 +20,7 @@ export default function Home() {
   const [filters, setFilters] = useState<FilterState>({
     levels: [],
     sources: [],
+    searchTerm: "",
   });
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [timelineState, setTimelineState] = useState({ zoom: 1, scroll: 0 });
@@ -50,16 +51,23 @@ export default function Home() {
 
   const filteredEntries = useMemo(() => {
     if (!logEntries.length) return [];
+    const lowerCaseSearchTerm = filters.searchTerm.toLowerCase();
+    
     return logEntries.filter((entry) => {
       const levelMatch = filters.levels.length === 0 || filters.levels.includes(entry.level);
       const sourceMatch = filters.sources.length === 0 || filters.sources.includes(entry.source);
-      return levelMatch && sourceMatch;
+      const searchMatch = filters.searchTerm === "" || entry.message.toLowerCase().includes(lowerCaseSearchTerm);
+      return levelMatch && sourceMatch && searchMatch;
     });
   }, [logEntries, filters]);
 
   const { availableLevels, availableSources } = useMemo(() => {
     const levelsInFiltered = new Set<EventLevel>();
     const sourcesInFiltered = new Set<EventSource>();
+
+    const baseEntries = filters.searchTerm 
+        ? logEntries.filter(entry => entry.message.toLowerCase().includes(filters.searchTerm.toLowerCase())) 
+        : logEntries;
 
     // If no filters are active, all initially available options are available.
     if (filters.levels.length === 0 && filters.sources.length === 0) {
@@ -68,15 +76,15 @@ export default function Home() {
     } else {
       // Determine available sources based on selected levels
       const levelFilteredEntries = filters.levels.length > 0
-        ? logEntries.filter(entry => filters.levels.includes(entry.level))
-        : logEntries;
+        ? baseEntries.filter(entry => filters.levels.includes(entry.level))
+        : baseEntries;
 
       levelFilteredEntries.forEach(entry => sourcesInFiltered.add(entry.source));
 
       // Determine available levels based on selected sources
       const sourceFilteredEntries = filters.sources.length > 0
-        ? logEntries.filter(entry => filters.sources.includes(entry.source))
-        : logEntries;
+        ? baseEntries.filter(entry => filters.sources.includes(entry.source))
+        : baseEntries;
 
       sourceFilteredEntries.forEach(entry => levelsInFiltered.add(entry.level));
 
@@ -101,6 +109,7 @@ export default function Home() {
       availableSources: filters.levels.length > 0 ? Array.from(sourcesInFiltered) : groupedSources.flatMap(g => g.sources),
     };
   }, [filters, logEntries, initialAvailableLevels, groupedSources, filteredEntries]);
+
 
   const handleLogsParsed = (newLogs: Omit<LogEntry, 'id'>[]) => {
     const lastId = logEntries.length > 0 ? logEntries[logEntries.length - 1].id : -1;
@@ -130,7 +139,7 @@ export default function Home() {
 
   const handleReset = () => {
     setLogEntries([]);
-    setFilters({ levels: [], sources: [] });
+    setFilters({ levels: [], sources: [], searchTerm: "" });
     setSelectedEventId(null);
     setTimelineState({ zoom: 1, scroll: 0});
   }

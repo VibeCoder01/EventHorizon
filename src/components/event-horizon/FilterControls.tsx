@@ -8,6 +8,8 @@ import type { FilterState, EventLevel, EventSource, SourceGroup, LogEntry } from
 import { ScrollArea } from "../ui/scroll-area";
 import { AddLogFile } from "./AddLogFile";
 import { parseLogFile } from "@/lib/parser";
+import { Input } from "../ui/input";
+import { Search } from "lucide-react";
 
 interface FilterControlsProps {
   filters: FilterState;
@@ -44,15 +46,28 @@ export function FilterControls({
             : filters.sources.filter(s => s !== source);
         setFilters({ ...filters, sources: newSources });
     };
+
+    const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setFilters({ ...filters, searchTerm: event.target.value });
+    }
     
   return (
     <Card className="h-full bg-card/50">
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between pb-4">
         <CardTitle className="text-lg">Filter Events</CardTitle>
         <AddLogFile onLogsParsed={onLogsParsed} onError={onError} parser={parseLogFile} />
       </CardHeader>
       <CardContent>
-        <ScrollArea className="h-[480px]">
+        <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+                placeholder="Search messages..."
+                value={filters.searchTerm}
+                onChange={handleSearchChange}
+                className="pl-10 bg-background/50"
+            />
+        </div>
+        <ScrollArea className="h-[420px]">
           <div className="space-y-6 p-1">
             <div className="space-y-3">
                 <h4 className="font-semibold text-sm text-muted-foreground">By Level</h4>

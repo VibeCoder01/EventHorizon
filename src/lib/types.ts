@@ -13,6 +13,7 @@ export interface LogEntry {
 export interface FilterState {
   levels: EventLevel[];
   sources: EventSource[];
+  searchTerm: string;
 }
 
 export type SourceGroup = {

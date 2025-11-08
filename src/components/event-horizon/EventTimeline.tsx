@@ -488,6 +488,17 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                     className="relative h-full"
                     style={{ width: `${100 * zoomLevel}%` }}
                 >
+                    {/* Vertical Grid Lines */}
+                    {timeTicks.map(tick => (
+                        <div 
+                            key={`grid-${tick.time}`} 
+                            className="absolute top-0 bottom-0"
+                            style={{ left: `${getPosition(tick.time)}%`}}
+                        >
+                            <div className={cn("w-px h-full", tick.isMajor ? "bg-secondary/40" : "bg-secondary/20")}></div>
+                        </div>
+                    ))}
+
                     <div className="absolute top-1/2 left-0 w-full h-0.5 bg-secondary/50 -translate-y-1/2" />
 
                     {selectionBox && timelineRef.current && (
@@ -530,10 +541,10 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                                     style={style}
                                 >
                                     <div className={cn(
-                                        `w-[2px] h-[2px] rounded-full ${dotColor}`, {
+                                        `rounded-full ${dotColor}`, {
                                             "ring-2 ring-offset-2 ring-offset-background ring-primary": isSelected,
                                         }
-                                    )} />
+                                    )} style={{ width: '2px', height: '2px' }}/>
                                 </div>
                             );
                         }
