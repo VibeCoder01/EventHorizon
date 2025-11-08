@@ -100,7 +100,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const timelineRef = useRef<HTMLDivElement>(null);
   const [horizontalJitter, setHorizontalJitter] = useState(20);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; endX: number } | null>(null);
-  const [zoomFocusPoint, setZoomFocusPoint] = useState(0.5); // 0.5 is the center
   const [visibleEntries, setVisibleEntries] = useState<LogEntry[]>([]);
   const [visibleTimeRange, setVisibleTimeRange] = useState({ start: 0, end: 0 });
   const animationFrameRef = useRef<number>();
@@ -219,12 +218,12 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
       debounceTimer.current = setTimeout(() => {
           const newZoom = sliderToZoom(interactiveZoom);
           if (newZoom !== zoomLevel) {
-              applyZoom(newZoom, zoomFocusPoint);
+              applyZoom(newZoom, 0.5); // Always zoom to center with slider
           }
       }, DEBOUNCE_DELAY);
 
       return () => clearTimeout(debounceTimer.current);
-  }, [interactiveZoom, zoomLevel, zoomFocusPoint, applyZoom]);
+  }, [interactiveZoom, zoomLevel, applyZoom]);
 
   useEffect(() => {
     if (selectedEvent && timelineRef.current && timeRange > 0) {
@@ -265,11 +264,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   }, [zoomLevel, applyZoom]);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (timelineRef.current) {
-        const rect = timelineRef.current.getBoundingClientRect();
-        setZoomFocusPoint((event.clientX - rect.left) / rect.width);
-    }
-    
     if (event.shiftKey) {
         setSelectionBox({ startX: event.clientX, endX: event.clientX });
         return;
