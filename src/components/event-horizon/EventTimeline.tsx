@@ -115,9 +115,10 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 
   const timeRange = maxTime - minTime;
   
-  const getPosition = useCallback((timestamp: Date) => {
+  const getPosition = useCallback((timestamp: Date | number) => {
     if (timeRange === 0) return 50;
-    return ((new Date(timestamp).getTime() - minTime) / timeRange) * 100;
+    const time = timestamp instanceof Date ? timestamp.getTime() : timestamp;
+    return ((time - minTime) / timeRange) * 100;
   }, [minTime, timeRange]);
 
   const updateVisibleEntries = useCallback(() => {
@@ -351,25 +352,37 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   };
 
   const timeTicks = useMemo(() => {
-    if (!timeRange) return [];
+    if (!timeRange || visibleTimeRange.start === 0) return [];
     
-    const visibleRangeMs = (visibleTimeRange.end - visibleTimeRange.start)
+    const visibleRangeMs = (visibleTimeRange.end - visibleTimeRange.start);
     const { interval, format: tickFormat } = getNiceTimeInterval(visibleRangeMs, 10);
     
     const ticks = [];
     const startTime = visibleTimeRange.start;
     let tickTime = Math.floor(startTime / interval) * interval;
+    const minorInterval = interval / 5;
 
-    while (tickTime < visibleTimeRange.end) {
-        if (tickTime >= visibleTimeRange.start) {
-            const isMajor = tickTime % (interval * 5) === 0;
+    while (tickTime < visibleTimeRange.end + interval) {
+        if (tickTime >= visibleTimeRange.start - interval) {
+            
+            for(let i = 1; i < 5; i++) {
+                const minorTickTime = tickTime + (minorInterval * i);
+                if (minorTickTime < visibleTimeRange.end + interval) {
+                     ticks.push({
+                        time: minorTickTime,
+                        label: null,
+                        isMajor: false
+                    });
+                }
+            }
+            
             ticks.push({
                 time: tickTime,
                 label: format(new Date(tickTime), tickFormat),
-                isMajor: isMajor,
+                isMajor: true,
             });
         }
-        tickTime += interval / 5; // minor ticks
+        tickTime += interval;
     }
     return ticks;
   }, [visibleTimeRange, timeRange]);
@@ -548,20 +561,17 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                         )
                     })}
 
-                    <div className="absolute bottom-0 left-0 w-full h-6">
-                        {timeTicks.map(tick => {
-                             const pos = ((tick.time - minTime) / timeRange) * 100;
-                             return (
-                                <div key={tick.time} className="absolute h-full top-0" style={{ left: `${pos}%`}}>
-                                    <div className={cn("w-px bg-secondary/30", tick.isMajor ? "h-3" : "h-2")}></div>
-                                    {tick.isMajor && (
-                                        <div className="absolute -bottom-4 text-xs text-muted-foreground -translate-x-1/2">
-                                            {tick.label}
-                                        </div>
-                                    )}
-                                </div>
-                             )
-                        })}
+                    <div className="absolute bottom-0 left-0 w-full h-8">
+                        {timeTicks.map(tick => (
+                             <div key={tick.time} className="absolute h-full top-0" style={{ left: `${getPosition(tick.time)}%`}}>
+                                <div className={cn("w-px bg-secondary/50", tick.isMajor ? "h-3" : "h-2")}></div>
+                                {tick.isMajor && tick.label && (
+                                    <div className="absolute top-4 -translate-x-1/2 text-xs text-muted-foreground">
+                                        {tick.label}
+                                    </div>
+                                )}
+                            </div>
+                         ))}
                     </div>
                 </div>
             </div>
@@ -572,10 +582,3 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
-
-    
-
-    
-
-    
-
