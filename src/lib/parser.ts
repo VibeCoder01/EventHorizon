@@ -1,3 +1,4 @@
+
 'use server';
 
 import type { LogEntry, EventLevel } from './types';
@@ -80,6 +81,17 @@ const LOG_PATTERNS = [
             level: mapGenericLevel(parts[2]),
             source: 'Application', // Default source
             message: parts[3]
+        })
+    },
+    // 7. Fail2Ban log format (e.g., 2025-11-03 13:29:37,861 fail2ban.server [1349]: INFO message)
+    {
+        name: 'FAIL2BAN_LOG',
+        regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d{3})\s+([\w\.-]+)\s+\[\d+\]:\s+([A-Z]+)\s+(.*)$/,
+        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+            timestamp: new Date(parts[1].replace(',', '.')),
+            source: parts[2],
+            level: mapGenericLevel(parts[3]),
+            message: parts[4]
         })
     },
 ];
