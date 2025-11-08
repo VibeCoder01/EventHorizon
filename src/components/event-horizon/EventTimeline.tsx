@@ -73,6 +73,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const [selectionBox, setSelectionBox] = useState<{ startX: number; endX: number } | null>(null);
   const [zoomFocusPoint, setZoomFocusPoint] = useState(0.5); // 0.5 is the center
   const [visibleEntries, setVisibleEntries] = useState<LogEntry[]>([]);
+  const [visibleTimeRange, setVisibleTimeRange] = useState({ start: 0, end: 0 });
   const animationFrameRef = useRef<number>();
 
   const { minTime, maxTime } = useMemo(() => {
@@ -99,21 +100,28 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const { scrollLeft, clientWidth } = timelineRef.current;
     const timelineWidth = clientWidth * zoomLevel;
 
+    // Update visible time range
+    const startPercent = (scrollLeft / timelineWidth);
+    const endPercent = ((scrollLeft + clientWidth) / timelineWidth);
+    const visibleStartTime = minTime + (startPercent * timeRange);
+    const visibleEndTime = minTime + (endPercent * timeRange);
+    setVisibleTimeRange({ start: visibleStartTime, end: visibleEndTime });
+
     const buffer = clientWidth * 0.5;
     const viewStart = scrollLeft - buffer;
     const viewEnd = scrollLeft + clientWidth + buffer;
 
-    const startPercent = (viewStart / timelineWidth) * 100;
-    const endPercent = (viewEnd / timelineWidth) * 100;
+    const startPosPercent = (viewStart / timelineWidth) * 100;
+    const endPosPercent = (viewEnd / timelineWidth) * 100;
 
     const visible = entries.filter(entry => {
       const position = getPosition(entry.timestamp);
-      return position >= startPercent && position <= endPercent;
+      return position >= startPosPercent && position <= endPosPercent;
     });
 
     setVisibleEntries(visible);
 
-  }, [entries, getPosition, zoomLevel]);
+  }, [entries, getPosition, zoomLevel, minTime, timeRange]);
 
   const requestUpdate = useCallback(() => {
     if (animationFrameRef.current) {
@@ -326,6 +334,17 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     );
   }
 
+  const formatTimestamp = (ts: number) => {
+    if (ts === 0) return '';
+    const date = new Date(ts);
+    const dayDiff = (maxTime - minTime) / (1000 * 60 * 60 * 24);
+    
+    if (dayDiff > 2) {
+      return format(date, "MMM d, HH:mm:ss");
+    }
+    return format(date, "HH:mm:ss.SSS");
+  };
+
   return (
     <Card className="h-[600px] bg-card/50 flex flex-col">
       <CardHeader>
@@ -383,7 +402,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pt-4 pb-8 flex-grow overflow-hidden">
+      <CardContent className="pt-4 pb-8 flex-grow overflow-hidden relative">
         <TooltipProvider>
             <div 
               ref={timelineRef}
@@ -452,12 +471,11 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                             </Tooltip>
                         )
                     })}
-                    
-                     <div className="absolute top-full text-xs text-muted-foreground left-0">{minTime ? format(new Date(minTime), "HH:mm") : ''}</div>
-                     <div className="absolute top-full text-xs text-muted-foreground right-0">{maxTime ? format(new Date(maxTime), "HH:mm") : ''}</div>
                 </div>
             </div>
         </TooltipProvider>
+        <div className="absolute bottom-0 left-6 text-xs text-muted-foreground font-mono">{formatTimestamp(visibleTimeRange.start)}</div>
+        <div className="absolute bottom-0 right-6 text-xs text-muted-foreground font-mono text-right">{formatTimestamp(visibleTimeRange.end)}</div>
       </CardContent>
     </Card>
   );
