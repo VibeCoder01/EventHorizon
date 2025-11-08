@@ -105,6 +105,17 @@ const LOG_PATTERNS = [
             message: parts[4]
         })
     },
+    // 9. cloud-init-output.log format
+    {
+        name: 'CLOUD_INIT_OUTPUT',
+        regex: /^Cloud-init v\..*? running '([^']*)' at ([\w\s,:]+\s\+\d{4})\./,
+        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+            timestamp: new Date(parts[2]),
+            level: 'Information',
+            source: `cloud-init:${parts[1]}`,
+            message: parts[0]
+        })
+    },
 ];
 
 // Infer level from message content for logs that don't specify a level
@@ -190,9 +201,10 @@ export async function parseLogFile(fileContent: string, filename: string): Promi
 
     const lines = fileContent.split(/\r?\n/);
     const parsedLogs: Omit<LogEntry, 'id'>[] = [];
-    const fallbackTimestamp = new Date();
     
+    let lastKnownTimestamp = new Date(); // Fallback timestamp
     let successfulParses = 0;
+
     for (const line of lines) {
         if (!line.trim()) continue;
 
@@ -203,6 +215,7 @@ export async function parseLogFile(fileContent: string, filename: string): Promi
                 try {
                     const partialEntry = pattern.map(match);
                     if (partialEntry.timestamp && !isNaN(partialEntry.timestamp.getTime())) {
+                        lastKnownTimestamp = partialEntry.timestamp; // Update last known timestamp
                         parsedLogs.push({
                             filename,
                             timestamp: partialEntry.timestamp,
@@ -220,10 +233,10 @@ export async function parseLogFile(fileContent: string, filename: string): Promi
             }
         }
         if (!entryParsed) {
-            // Fallback for lines that don't match any pattern with a timestamp
+            // Fallback for lines that don't have their own timestamp
              parsedLogs.push({
                 filename,
-                timestamp: fallbackTimestamp,
+                timestamp: lastKnownTimestamp, // Use the last known good timestamp
                 level: inferLevelFromMessage(line),
                 source: 'Unknown',
                 message: line,
