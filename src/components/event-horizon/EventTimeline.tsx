@@ -495,7 +495,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                             className="absolute top-0 bottom-0"
                             style={{ left: `${getPosition(tick.time)}%`}}
                         >
-                            <div className={cn("w-px h-full", tick.isMajor ? "bg-secondary/40" : "bg-secondary/20")}></div>
+                            <div className={cn("w-px h-full", tick.isMajor ? "bg-primary/20" : "bg-primary/10")}></div>
                         </div>
                     ))}
 
