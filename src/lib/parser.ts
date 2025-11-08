@@ -3,6 +3,35 @@
 
 import type { LogEntry, EventLevel } from './types';
 
+// New function to handle block-based apt-history.log
+const parseAptHistoryLog = (fileContent: string, filename: string): Omit<LogEntry, 'id'>[] => {
+    const entries: Omit<LogEntry, 'id'>[] = [];
+    // Regex to capture each block from Start-Date to End-Date
+    const blockRegex = /Start-Date: ([\d\s:-]+)\nCommandline: ([^\n]+)\n((?:Upgrade|Install|Remove):[^\n]+(?:\n\s+.[^\n]+)*)\nEnd-Date: ([\d\s:-]+)/g;
+
+    let match;
+    while ((match = blockRegex.exec(fileContent)) !== null) {
+        const [fullMatch, startDate, commandline, actions, endDate] = match;
+        
+        // Use the Start-Date for the timestamp
+        const timestamp = new Date(startDate.trim());
+
+        // Consolidate actions into the message
+        const message = `Command: ${commandline.trim()}; Actions: ${actions.replace(/\n\s+/g, ' ').trim()}`;
+        
+        entries.push({
+            filename,
+            timestamp,
+            level: 'Information', // APT actions are typically informational
+            source: 'apt',
+            message: message,
+        });
+    }
+
+    return entries;
+};
+
+
 // Regex patterns for various log formats
 const LOG_PATTERNS = [
     // 0. Modern syslog format with PID (e.g., from user-provided snippet)
@@ -198,6 +227,14 @@ export async function parseLogFile(fileContent: string, filename: string): Promi
     if (!fileContent.trim()) {
         throw new Error("The uploaded file is empty or contains only whitespace.");
     }
+    
+    // First, check for special multi-line formats like apt-history.log
+    if (filename.includes('apt-history.log') || fileContent.includes('Start-Date:')) {
+        const aptEntries = parseAptHistoryLog(fileContent, filename);
+        if (aptEntries.length > 0) {
+            return aptEntries;
+        }
+    }
 
     const lines = fileContent.split(/\r?\n/);
     const parsedLogs: Omit<LogEntry, 'id'>[] = [];
@@ -258,3 +295,5 @@ export async function parseLogFile(fileContent: string, filename: string): Promi
 
     return parsedLogs;
 }
+
+    
