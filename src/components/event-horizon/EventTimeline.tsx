@@ -19,6 +19,8 @@ interface EventTimelineProps {
   allEntries: LogEntry[];
   selectedEvent: LogEntry | null;
   onEventSelect: (eventId: number | null) => void;
+  initialState?: { zoom: number; scroll: number };
+  onStateChange: (state: { zoom: number; scroll: number }) => void;
 }
 
 const levelConfig: Record<EventLevel, { icon: React.ElementType, color: string }> = {
@@ -44,6 +46,7 @@ const DEBOUNCE_DELAY = 150; // ms
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 100;
 const SLIDER_RANGE = [1, 100];
+const HEATMAP_BINS = 200;
 
 // Convert a linear slider value to a logarithmic zoom level
 const sliderToZoom = (value: number) => {
@@ -60,9 +63,9 @@ const zoomToSlider = (zoom: number) => {
 };
 
 
-export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelect }: EventTimelineProps) {
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [interactiveZoom, setInteractiveZoom] = useState(zoomToSlider(1));
+export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelect, initialState, onStateChange }: EventTimelineProps) {
+  const [zoomLevel, setZoomLevel] = useState(initialState?.zoom ?? 1);
+  const [interactiveZoom, setInteractiveZoom] = useState(zoomToSlider(initialState?.zoom ?? 1));
   const debounceTimer = useRef<NodeJS.Timeout>();
   
   const [isPanning, setIsPanning] = useState(false);
@@ -90,6 +93,27 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     if (timeRange === 0) return 50;
     return ((new Date(timestamp).getTime() - minTime) / timeRange) * 100;
   }, [minTime, timeRange]);
+
+  const heatmapData = useMemo(() => {
+    if (timeRange === 0) return [];
+    
+    const bins = Array(HEATMAP_BINS).fill(0);
+    allEntries.forEach(entry => {
+      const position = getPosition(entry.timestamp);
+      const binIndex = Math.floor(position / (100 / HEATMAP_BINS));
+      if(binIndex >= 0 && binIndex < HEATMAP_BINS) {
+        bins[binIndex]++;
+      }
+    });
+
+    const maxInBin = Math.max(...bins);
+    if (maxInBin === 0) return [];
+
+    return bins.map(count => ({
+      count,
+      opacity: count > 0 ? 0.1 + (count / maxInBin) * 0.9 : 0
+    }));
+  }, [allEntries, getPosition, timeRange]);
 
   const updateVisibleEntries = useCallback(() => {
     if (!timelineRef.current) return;
@@ -124,16 +148,24 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     requestUpdate();
     
     const timelineEl = timelineRef.current;
+    
+    const handleScroll = () => {
+      requestUpdate();
+      if(timelineEl) {
+        onStateChange({ zoom: zoomLevel, scroll: timelineEl.scrollLeft });
+      }
+    }
+
     if (timelineEl) {
-        timelineEl.addEventListener('scroll', requestUpdate, { passive: true });
+        timelineEl.addEventListener('scroll', handleScroll, { passive: true });
         return () => {
-            timelineEl.removeEventListener('scroll', requestUpdate);
+            timelineEl.removeEventListener('scroll', handleScroll);
             if(animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
         };
     }
-  }, [requestUpdate, entries, zoomLevel]);
+  }, [requestUpdate, entries, zoomLevel, onStateChange]);
 
   const applyZoom = useCallback((newZoom: number, focusPointPercent: number) => {
     if (!timelineRef.current) return;
@@ -149,15 +181,23 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const newScrollLeft = timePercent * (viewWidth * newZoom) - viewWidth * focusPointPercent;
 
     setZoomLevel(newZoom);
-    setInteractiveZoom(zoomToSlider(newZoom));
+    onStateChange({ zoom: newZoom, scroll: newScrollLeft });
     
     requestAnimationFrame(() => {
         if (timelineRef.current) {
             timelineRef.current.scrollLeft = newScrollLeft;
         }
     });
-  }, [zoomLevel]);
+  }, [zoomLevel, onStateChange]);
   
+  useEffect(() => {
+    setInteractiveZoom(zoomToSlider(initialState?.zoom ?? 1));
+    setZoomLevel(initialState?.zoom ?? 1);
+    if(timelineRef.current && initialState?.scroll !== undefined) {
+      timelineRef.current.scrollLeft = initialState.scroll;
+    }
+  }, [initialState]);
+
   useEffect(() => {
       clearTimeout(debounceTimer.current);
       debounceTimer.current = setTimeout(() => {
@@ -199,6 +239,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             const rect = timelineRef.current.getBoundingClientRect();
             const focusPercent = (event.clientX - rect.left) / rect.width;
             applyZoom(newZoom, focusPercent);
+            setInteractiveZoom(zoomToSlider(newZoom));
         }
     } else {
         if (timelineRef.current) {
@@ -234,18 +275,28 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         const rect = timelineRef.current.getBoundingClientRect();
         const startX = Math.min(selectionBox.startX, selectionBox.endX) - rect.left;
         const endX = Math.max(selectionBox.startX, selectionBox.endX) - rect.left;
+        const selectionWidth = endX - startX;
 
-        if (Math.abs(endX - startX) > 10) { 
+        if (selectionWidth > 10) { 
             const currentScrollLeft = timelineRef.current.scrollLeft;
             const totalWidth = rect.width * zoomLevel;
 
             const startPercent = (currentScrollLeft + startX) / totalWidth;
             const endPercent = (currentScrollLeft + endX) / totalWidth;
             
-            const newZoom = Math.min(MAX_ZOOM, zoomLevel * (1 / (endPercent - startPercent)));
-            const focus = startPercent + (endPercent - startPercent) / 2;
+            const newZoom = Math.min(MAX_ZOOM, zoomLevel * (rect.width / selectionWidth));
+            const newScroll = startPercent * (rect.width * newZoom);
+            
+            setZoomLevel(newZoom);
+            setInteractiveZoom(zoomToSlider(newZoom));
+            onStateChange({ zoom: newZoom, scroll: newScroll });
 
-            applyZoom(newZoom, focus);
+
+            requestAnimationFrame(() => {
+                if (timelineRef.current) {
+                    timelineRef.current.scrollLeft = newScroll;
+                }
+            });
         }
     }
     
@@ -254,7 +305,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
      if(timelineRef.current) {
         timelineRef.current.style.cursor = 'grab';
     }
-  }, [selectionBox, zoomLevel, applyZoom]);
+  }, [selectionBox, zoomLevel, onStateChange]);
 
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (selectionBox) {
@@ -279,10 +330,12 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const rect = timelineRef.current.getBoundingClientRect();
     const focusPercent = (event.clientX - rect.left) / rect.width;
     applyZoom(newZoom, focusPercent);
+    setInteractiveZoom(zoomToSlider(newZoom));
   }, [zoomLevel, applyZoom]);
   
   const handleResetZoom = () => {
     applyZoom(MIN_ZOOM, 0.5);
+    setInteractiveZoom(zoomToSlider(MIN_ZOOM));
   };
 
   if (allEntries.length === 0) {
@@ -368,7 +421,18 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                     className="relative h-full"
                     style={{ width: `${100 * zoomLevel}%` }}
                 >
-                    <div className="absolute top-1/2 left-0 w-full h-0.5 bg-secondary -translate-y-1/2" />
+                    {/* Heatmap Background */}
+                    <div className="absolute inset-0 flex">
+                        {heatmapData.map((bin, index) => (
+                            <div 
+                                key={index}
+                                className="h-full flex-1 bg-primary"
+                                style={{ opacity: bin.opacity, transition: 'opacity 300ms ease-in-out' }}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="absolute top-1/2 left-0 w-full h-0.5 bg-secondary/50 -translate-y-1/2" />
 
                     {selectionBox && timelineRef.current && (
                         <div

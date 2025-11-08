@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import type { LogEntry, FilterState, EventLevel, EventSource, SourceGroup } from "@/lib/types";
+import { useState, useMemo, useCallback, useRef } from "react";
+import type { LogEntry, FilterState, EventLevel, EventSource, SourceGroup, SessionState } from "@/lib/types";
 import { EventHorizonHeader } from "@/components/event-horizon/EventHorizonHeader";
 import { LogUploader } from "@/components/event-horizon/LogUploader";
 import { FilterControls } from "@/components/event-horizon/FilterControls";
@@ -22,6 +22,8 @@ export default function Home() {
     sources: [],
   });
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [timelineState, setTimelineState] = useState({ zoom: 1, scroll: 0 });
+  const loadSessionInputRef = useRef<HTMLInputElement>(null);
   
   const { initialAvailableLevels, groupedSources } = useMemo(() => {
     if (!logEntries.length) return { initialAvailableLevels: [], groupedSources: [] };
@@ -130,7 +132,75 @@ export default function Home() {
     setLogEntries([]);
     setFilters({ levels: [], sources: [] });
     setSelectedEventId(null);
+    setTimelineState({ zoom: 1, scroll: 0});
   }
+  
+  const handleSaveSession = () => {
+    if (logEntries.length === 0) {
+      toast({ title: "Nothing to save", description: "Upload a log file before saving a session."});
+      return;
+    }
+    const sessionState: SessionState = {
+      logEntries,
+      filters,
+      timelineState,
+    };
+    
+    const sessionBlob = new Blob([JSON.stringify(sessionState, null, 2)], {type: "application/json"});
+    const url = URL.createObjectURL(sessionBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `event-horizon-session-${new Date().toISOString()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: "Session Saved", description: "Your session has been downloaded." });
+  };
+  
+  const handleLoadSession = () => {
+    loadSessionInputRef.current?.click();
+  };
+
+  const handleSessionFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const sessionState: SessionState = JSON.parse(content);
+        
+        if (!sessionState.logEntries || !sessionState.filters || !sessionState.timelineState) {
+          throw new Error("Invalid session file format.");
+        }
+        
+        // Dates need to be rehydrated from strings
+        const rehydratedLogs = sessionState.logEntries.map(log => ({
+            ...log,
+            timestamp: new Date(log.timestamp)
+        }));
+        
+        setLogEntries(rehydratedLogs);
+        setFilters(sessionState.filters);
+        setTimelineState(sessionState.timelineState);
+        setSelectedEventId(null);
+
+        toast({ title: "Session Loaded", description: "Your session has been restored." });
+
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "An unknown error occurred during session loading.";
+        toast({ title: "Failed to Load Session", description: message, variant: "destructive" });
+      } finally {
+        if(event.target) {
+            event.target.value = ''; // Reset file input
+        }
+      }
+    };
+    reader.readAsText(file);
+  };
+
 
   const selectedEvent = useMemo(() => {
     if (selectedEventId === null) return null;
@@ -156,7 +226,13 @@ export default function Home() {
 
   return (
     <main className="container mx-auto px-4 py-8">
-      <EventHorizonHeader onReset={logEntries.length > 0 ? handleReset : undefined} />
+      <EventHorizonHeader 
+        onReset={logEntries.length > 0 ? handleReset : undefined} 
+        onSave={handleSaveSession}
+        onLoad={handleLoadSession}
+      />
+      <input type="file" ref={loadSessionInputRef} onChange={handleSessionFileChange} className="hidden" accept="application/json" />
+
 
       {logEntries.length === 0 ? (
         <div className="mt-16 text-center">
@@ -185,6 +261,8 @@ export default function Home() {
                         allEntries={logEntries}
                         selectedEvent={selectedEvent}
                         onEventSelect={handleEventSelect}
+                        initialState={timelineState}
+                        onStateChange={setTimelineState}
                     />
                 </div>
              </div>

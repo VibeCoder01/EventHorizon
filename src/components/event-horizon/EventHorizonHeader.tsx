@@ -1,13 +1,15 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Save, FolderOpen } from "lucide-react";
 
 interface EventHorizonHeaderProps {
   onReset?: () => void;
+  onSave: () => void;
+  onLoad: () => void;
 }
 
-export function EventHorizonHeader({ onReset }: EventHorizonHeaderProps) {
+export function EventHorizonHeader({ onReset, onSave, onLoad }: EventHorizonHeaderProps) {
   return (
     <header className="flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -19,12 +21,22 @@ export function EventHorizonHeader({ onReset }: EventHorizonHeaderProps) {
           Event Horizon
         </h1>
       </div>
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={onLoad}>
+            <FolderOpen className="mr-2 h-4 w-4" />
+            Load
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onSave}>
+            <Save className="mr-2 h-4 w-4" />
+            Save
+        </Button>
       {onReset && (
         <Button variant="ghost" size="sm" onClick={onReset}>
             <RotateCcw className="mr-2 h-4 w-4" />
             Reset
         </Button>
       )}
+      </div>
     </header>
   );
 }

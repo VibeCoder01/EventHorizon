@@ -19,3 +19,12 @@ export type SourceGroup = {
   filename: string;
   sources: EventSource[];
 };
+
+export interface SessionState {
+  logEntries: LogEntry[];
+  filters: FilterState;
+  timelineState: {
+    zoom: number;
+    scroll: number;
+  }
+}
