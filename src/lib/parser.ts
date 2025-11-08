@@ -34,7 +34,18 @@ const parseAptHistoryLog = (fileContent: string, filename: string): Omit<LogEntr
 
 // Regex patterns for various log formats
 const LOG_PATTERNS = [
-    // 0. Modern syslog format with PID (e.g., from user-provided snippet)
+    // 0. Key-Value format (like ollama logs) - check for `level=` first.
+    {
+        name: 'KEY_VALUE_LOG',
+        regex: /time="?([^"\s]+)"?\s+level=([A-Z]+)\s+source="?([^"\s]+)"?\s+msg="([^"]+)"/,
+        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+            timestamp: new Date(parts[1]),
+            level: mapGenericLevel(parts[2]),
+            source: parts[3],
+            message: `${parts[4]} ${parts.input.substring(parts[0].length)}`.trim()
+        })
+    },
+    // 1. Modern syslog format with PID (e.g., from user-provided snippet)
     {
         name: 'SYSLOG_MODERN_V2',
         regex: /^([0-9T\:\.\-\+Z]+)\s+([\w\.\-]+)\s+([\w\.\-]+(?:\[\d+\])?):\s+(.*)$/,
@@ -45,7 +56,7 @@ const LOG_PATTERNS = [
             message: parts[4]
         })
     },
-    // 1. DPKG log format (e.g., 2025-11-03 23:04:18 startup archives unpack)
+    // 2. DPKG log format (e.g., 2025-11-03 23:04:18 startup archives unpack)
     {
         name: 'DPKG_LOG',
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})\s+(.*)$/,
@@ -56,7 +67,7 @@ const LOG_PATTERNS = [
             message: parts[2]
         })
     },
-    // 2. RFC 5424 syslog format (e.g., <165>1 2003-10-11T22:14:15.003Z mymachine.example.com su - ID47 - message)
+    // 3. RFC 5424 syslog format (e.g., <165>1 2003-10-11T22:14:15.003Z mymachine.example.com su - ID47 - message)
     {
         name: 'RFC_5424',
         regex: /^\<(\d+)\>1\s+([0-9T\:\.\-\+Z]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+(.*)$/,
@@ -67,7 +78,7 @@ const LOG_PATTERNS = [
             message: parts[8]
         })
     },
-    // 3. RFC 3164 syslog format (e.g., <34>Oct 11 22:14:15 mymachine su: 'su root' failed for lonvick on /dev/pts/8)
+    // 4. RFC 3164 syslog format (e.g., <34>Oct 11 22:14:15 mymachine su: 'su root' failed for lonvick on /dev/pts/8)
     {
         name: 'RFC_3164',
         regex: /^\<(\d+)\>([A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+([\w\.\-]+)\s+([^:]+):\s+(.*)$/,
@@ -78,7 +89,7 @@ const LOG_PATTERNS = [
             message: parts[5].trim()
         })
     },
-    // 4. Windows Event Log CSV format (e.g., "Information","1/1/2024 12:00:00 PM","Source","EventID","TaskCategory","Message")
+    // 5. Windows Event Log CSV format (e.g., "Information","1/1/2024 12:00:00 PM","Source","EventID","TaskCategory","Message")
     // This regex is flexible and captures quoted or unquoted fields.
     {
         name: 'WINDOWS_CSV',
@@ -90,7 +101,7 @@ const LOG_PATTERNS = [
             message: parts[4]
         })
     },
-    // 5. Common application log format (e.g., 2024-01-01 12:00:00,123 INFO [source] message)
+    // 6. Common application log format (e.g., 2024-01-01 12:00:00,123 INFO [source] message)
     {
         name: 'APP_LOG_1',
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}(?:,\d{3})?)\s+([A-Z]+)\s+\[([^\]]+)\]\s+(.*)$/,
@@ -101,7 +112,7 @@ const LOG_PATTERNS = [
             message: parts[4]
         })
     },
-     // 6. ISO 8601 with level and message (e.g., 2024-07-23T10:30:00.123Z [ERROR] Failed to connect to database.)
+     // 7. ISO 8601 with level and message (e.g., 2024-07-23T10:30:00.123Z [ERROR] Failed to connect to database.)
     {
         name: 'ISO_WITH_LEVEL',
         regex: /^([0-9T\:\.\-\+Z]+)\s+\[([A-Z]+)\]\s+(.*)$/,
@@ -112,7 +123,7 @@ const LOG_PATTERNS = [
             message: parts[3]
         })
     },
-    // 7. Fail2Ban log format (e.g., 2025-11-03 13:29:37,861 fail2ban.server [1349]: INFO message)
+    // 8. Fail2Ban log format (e.g., 2025-11-03 13:29:37,861 fail2ban.server [1349]: INFO message)
     {
         name: 'FAIL2BAN_LOG',
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d{3})\s+([\w\.-]+)\s+\[\d+\]:\s+([A-Z]+)\s+(.*)$/,
@@ -123,7 +134,7 @@ const LOG_PATTERNS = [
             message: parts[4]
         })
     },
-    // 8. cloud-init.log format (e.g., 2025-08-28 21:21:33,170 - log_util.py[DEBUG]: message)
+    // 9. cloud-init.log format (e.g., 2025-08-28 21:21:33,170 - log_util.py[DEBUG]: message)
     {
         name: 'CLOUD_INIT_LOG',
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d{3})\s+-\s+([\w\.\-]+)\[([A-Z]+)\]:\s+(.*)$/,
@@ -134,7 +145,7 @@ const LOG_PATTERNS = [
             message: parts[4]
         })
     },
-    // 9. cloud-init-output.log format
+    // 10. cloud-init-output.log format
     {
         name: 'CLOUD_INIT_OUTPUT',
         regex: /^Cloud-init v\..*? running '([^']*)' at ([\w\s,:]+\s\+\d{4})\./,
