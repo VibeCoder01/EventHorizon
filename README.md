@@ -4,10 +4,11 @@ Event Horizon is a powerful, interactive log analysis tool designed to help you 
 
 ## Features
 
-- **Interactive Timeline:** Visualize log entries over time. Pan (click & drag), zoom (Ctrl/Cmd + mouse wheel, or use the slider), and double-click to focus on a specific point in time. Shift+drag to create a selection box to zoom into a specific region.
+- **Interactive Timeline:** Visualize log entries over time with dynamic vertical grid lines and time markers. Pan (click & drag), zoom (Ctrl/Cmd + mouse wheel, or use the zoom slider), and double-click to focus on a specific point in time. Use Shift+drag to create a selection box that intelligently zooms and centers the selected region.
 - **Detailed Event Table:** View all log entries in a filterable, sortable table. Found entries are counted and displayed.
-- **Dynamic Filtering:** Filter events by log level (Error, Warning, Info, etc.) and source. The availability of other filters dynamically updates based on your selections to guide you toward meaningful results.
+- **Dynamic Filtering:** Filter events by log level (Error, Warning, Info, etc.), source, and a full-text search on messages. The availability of other filters dynamically updates based on your selections to guide you toward meaningful results.
 - **Multi-File Support:** Upload and analyze multiple log files simultaneously. Sources are automatically grouped by filename in the filter panel for easy identification.
+- **Session Management:** Save your entire session—including all loaded logs, filters, and timeline position—to a JSON file. Load a session later to pick up right where you left off.
 - **Log Parsing:** Automatically parses a variety of common log formats. Unrecognized lines are ingested with a generic 'Information' level and the timestamp of the previous valid entry.
 - **Significant Findings:** Get a quick, at-a-glance overview of the total number of events, warnings, and errors across all loaded files.
 - **Click-to-Focus:** Click an event in the table to immediately center it in the timeline, making it easy to see surrounding activity.
@@ -17,9 +18,10 @@ Event Horizon is a powerful, interactive log analysis tool designed to help you 
 1.  Run the application.
 2.  Drag and drop a log file onto the upload area, or click to browse.
 3.  To add more files, click the "Add Log" button in the "Filter Events" panel.
-4.  Use the filter controls on the left to narrow down events. Checkboxes for filters that will not produce results with the current selection are greyed out but still selectable.
+4.  Use the filter controls and search bar on the left to narrow down events.
 5.  Explore the timeline to identify patterns and anomalies.
 6.  Click on any row in the "Detailed Event Log" table to highlight it and automatically navigate to it on the timeline.
+7.  Use the "Save" and "Load" buttons to manage your analysis sessions.
 
 ## Supported Log Formats
 
