@@ -19,7 +19,7 @@ interface EventTimelineProps {
   allEntries: LogEntry[];
   selectedEvent: LogEntry | null;
   onEventSelect: (eventId: number | null) => void;
-  initialState?: { zoom: number; scroll: number };
+  initialState: { zoom: number; scroll: number };
   onStateChange: (state: { zoom: number; scroll: number }) => void;
 }
 
@@ -92,8 +92,7 @@ const getNiceTimeInterval = (rangeMs: number, targetTicks = 10) => {
 
 
 export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelect, initialState, onStateChange }: EventTimelineProps) {
-  const [zoomLevel, setZoomLevel] = useState(initialState?.zoom ?? 1);
-  const [interactiveZoom, setInteractiveZoom] = useState(zoomToSlider(initialState?.zoom ?? 1));
+  const { zoom: zoomLevel, scroll: scrollPosition } = initialState;
   const debounceTimer = useRef<NodeJS.Timeout>();
   
   const [isPanning, setIsPanning] = useState(false);
@@ -205,7 +204,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     
     const newScrollLeft = timePercent * (viewWidth * newZoom) - viewWidth * focusPointPercent + viewWidth/2;
 
-    setZoomLevel(newZoom);
     onStateChange({ zoom: newZoom, scroll: newScrollLeft });
     
     requestAnimationFrame(() => {
@@ -215,44 +213,31 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     });
   }, [zoomLevel, onStateChange]);
   
+  // Effect to synchronize the DOM scroll position with the state
   useEffect(() => {
-    setInteractiveZoom(zoomToSlider(initialState?.zoom ?? 1));
-    setZoomLevel(initialState?.zoom ?? 1);
-    if(timelineRef.current && initialState?.scroll !== undefined) {
-      timelineRef.current.scrollLeft = initialState.scroll;
+    if (timelineRef.current && timelineRef.current.scrollLeft !== scrollPosition) {
+      timelineRef.current.scrollLeft = scrollPosition;
     }
-  }, [initialState]);
-
-  useEffect(() => {
-      clearTimeout(debounceTimer.current);
-      debounceTimer.current = setTimeout(() => {
-          const newZoom = sliderToZoom(interactiveZoom);
-          if (newZoom !== zoomLevel) {
-              const rect = timelineRef.current?.getBoundingClientRect();
-              const focusPoint = rect ? (rect.width / 2) / rect.width : 0.5;
-              applyZoom(newZoom, focusPoint); 
-          }
-      }, DEBOUNCE_DELAY);
-
-      return () => clearTimeout(debounceTimer.current);
-  }, [interactiveZoom, zoomLevel, applyZoom]);
+  }, [scrollPosition]);
 
   useEffect(() => {
     if (selectedEvent && timelineRef.current && timeRange > 0) {
       const newZoomLevel = Math.max(zoomLevel, 5); 
-      if (newZoomLevel !== zoomLevel) {
-        applyZoom(newZoomLevel, 0.5);
-      }
 
       requestAnimationFrame(() => {
         if (timelineRef.current) {
           const position = getPosition(selectedEvent.timestamp);
           const targetScrollLeft = position - (timelineRef.current.clientWidth / 2);
-          timelineRef.current.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
+          
+          if (newZoomLevel !== zoomLevel) {
+            onStateChange({ zoom: newZoomLevel, scroll: targetScrollLeft });
+          } else {
+             timelineRef.current.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
+          }
         }
       });
     }
-  }, [selectedEvent, getPosition, zoomLevel, timeRange, applyZoom]);
+  }, [selectedEvent, timeRange, zoomLevel, getPosition, onStateChange]);
   
   const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
     if (event.ctrlKey || event.metaKey) {
@@ -264,7 +249,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             const rect = timelineRef.current.getBoundingClientRect();
             const focusPercent = (event.clientX - rect.left) / rect.width;
             applyZoom(newZoom, focusPercent);
-            setInteractiveZoom(zoomToSlider(newZoom));
         }
     } else {
         if (timelineRef.current) {
@@ -316,8 +300,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             const selectionStartInNewZoom = (selectionStartPercent * (clientWidth * newZoom)) + clientWidth/2;
             const newScroll = selectionStartInNewZoom + (selectionWidthInNewZoom / 2) - (clientWidth / 2);
             
-            setZoomLevel(newZoom);
-            setInteractiveZoom(zoomToSlider(newZoom));
             onStateChange({ zoom: newZoom, scroll: newScroll });
 
             requestAnimationFrame(() => {
@@ -364,12 +346,23 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const rect = timelineRef.current.getBoundingClientRect();
     const focusPercent = (event.clientX - rect.left) / rect.width;
     applyZoom(newZoom, focusPercent);
-    setInteractiveZoom(zoomToSlider(newZoom));
   }, [zoomLevel, applyZoom]);
   
   const handleResetZoom = () => {
-    applyZoom(MIN_ZOOM, 0.5);
-    setInteractiveZoom(zoomToSlider(MIN_ZOOM));
+    onStateChange({ zoom: MIN_ZOOM, scroll: 0 });
+  };
+  
+  const handleSliderChange = (value: number[]) => {
+      clearTimeout(debounceTimer.current);
+      const newSliderValue = value[0];
+      const newZoom = sliderToZoom(newSliderValue);
+      debounceTimer.current = setTimeout(() => {
+        if (newZoom !== zoomLevel && timelineRef.current) {
+            const rect = timelineRef.current.getBoundingClientRect();
+            const focusPoint = rect ? (rect.width / 2) / rect.width : 0.5;
+            applyZoom(newZoom, focusPoint); 
+        }
+      }, DEBOUNCE_DELAY);
   };
 
   const timeTicks = useMemo(() => {
@@ -451,8 +444,8 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
               <ZoomOut className="w-4 h-4 text-muted-foreground" />
               <Slider
                   aria-label="Zoom level"
-                  value={[interactiveZoom]}
-                  onValueChange={(value) => setInteractiveZoom(value[0])}
+                  value={[zoomToSlider(zoomLevel)]}
+                  onValueChange={handleSliderChange}
                   min={SLIDER_RANGE[0]}
                   max={SLIDER_RANGE[1]}
                   step={0.1}
@@ -621,3 +614,5 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
+
+    
