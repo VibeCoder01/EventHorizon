@@ -23,19 +23,20 @@ interface EventTimelineProps {
   onStateChange: (state: { zoom: number; scroll: number }) => void;
 }
 
-const levelConfig: Record<EventLevel, { icon: React.ElementType, color: string }> = {
-    'Information': { icon: Info, color: 'text-blue-400' },
-    'Warning': { icon: AlertTriangle, color: 'text-yellow-400' },
-    'Error': { icon: XCircle, color: 'text-red-500' },
-    'Critical': { icon: AlertOctagon, color: 'text-red-600' },
-    'Verbose': { icon: FileText, color: 'text-gray-500' },
-    'Debug': { icon: Bug, color: 'text-purple-400' },
-    'Notice': { icon: Bell, color: 'text-green-400' },
-    'Emergency': { icon: Siren, color: 'text-orange-500' },
-    'Alert': { icon: ShieldAlert, color: 'text-pink-500' },
+const levelConfig: Record<EventLevel, { icon: React.ElementType, color: string, dotColor: string }> = {
+    'Information': { icon: Info, color: 'text-blue-400', dotColor: 'bg-blue-400' },
+    'Warning': { icon: AlertTriangle, color: 'text-yellow-400', dotColor: 'bg-yellow-400' },
+    'Error': { icon: XCircle, color: 'text-red-500', dotColor: 'bg-red-500' },
+    'Critical': { icon: AlertOctagon, color: 'text-red-600', dotColor: 'bg-red-600' },
+    'Verbose': { icon: FileText, color: 'text-gray-500', dotColor: 'bg-gray-500' },
+    'Debug': { icon: Bug, color: 'text-purple-400', dotColor: 'bg-purple-400' },
+    'Notice': { icon: Bell, color: 'text-green-400', dotColor: 'bg-green-400' },
+    'Emergency': { icon: Siren, color: 'text-orange-500', dotColor: 'bg-orange-500' },
+    'Alert': { icon: ShieldAlert, color: 'text-pink-500', dotColor: 'bg-pink-500' },
 };
 
 const MAX_VERTICAL_JITTER = 250; 
+const HIGH_DENSITY_THRESHOLD = 500; // Switch to dots if more than this many events are visible
 
 const pseudoRandom = (seed: number) => {
     let x = Math.sin(seed) * 10000;
@@ -394,6 +395,8 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     return format(date, "HH:mm:ss.SSS");
   };
 
+  const isHighDensity = visibleEntries.length > HIGH_DENSITY_THRESHOLD;
+
   return (
     <Card className="h-[600px] bg-card/50 flex flex-col">
       <CardHeader>
@@ -483,11 +486,39 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                         const config = levelConfig[entry.level] || levelConfig['Information'];
                         const Icon = config.icon;
                         const color = config.color;
+                        const dotColor = config.dotColor;
                         const position = getPosition(entry.timestamp);
                         const isSelected = selectedEvent?.id === entry.id;
                         
                         const verticalJitter = (pseudoRandom(entry.id) - 0.5) * MAX_VERTICAL_JITTER;
                         const horizontalJitterOffset = (pseudoRandom(entry.id * 3) - 0.5) * horizontalJitter;
+
+                        const style = { 
+                            left: `${position}%`,
+                            transform: `translate(calc(-50% + ${horizontalJitterOffset}px), calc(-50% + ${verticalJitter}px))`,
+                            zIndex: isSelected ? 10 : 1,
+                        };
+
+                        if (isHighDensity) {
+                            return (
+                                <div
+                                    key={entry.id}
+                                    data-event-id={entry.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onEventSelect(isSelected ? null : entry.id);
+                                    }}
+                                    className="absolute top-1/2 -translate-x-1/2 cursor-pointer"
+                                    style={style}
+                                >
+                                    <div className={cn(
+                                        `w-2 h-2 rounded-full ${dotColor} transition-transform duration-200`, {
+                                            "scale-150 ring-2 ring-offset-2 ring-offset-background ring-primary": isSelected,
+                                        }
+                                    )} />
+                                </div>
+                            );
+                        }
 
                         return (
                             <Tooltip key={entry.id} delayDuration={100}>
@@ -499,11 +530,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                                           onEventSelect(isSelected ? null : entry.id);
                                         }}
                                         className="absolute top-1/2 -translate-x-1/2 cursor-pointer"
-                                        style={{ 
-                                            left: `${position}%`,
-                                            transform: `translate(calc(-50% + ${horizontalJitterOffset}px), calc(-50% + ${verticalJitter}px))`,
-                                            zIndex: isSelected ? 10 : 1,
-                                        }}
+                                        style={style}
                                     >
                                         <Icon className={cn(`w-6 h-6 ${color} transition-transform duration-200 hover:scale-150`, {
                                           "scale-150 drop-shadow-[0_0_12px]": isSelected
@@ -545,5 +572,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
+
+    
 
     
