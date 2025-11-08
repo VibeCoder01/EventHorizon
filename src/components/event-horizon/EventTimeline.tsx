@@ -41,10 +41,28 @@ const pseudoRandom = (seed: number) => {
 };
 
 const DEBOUNCE_DELAY = 150; // ms
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 100;
+const SLIDER_RANGE = [1, 100];
+
+// Convert a linear slider value to a logarithmic zoom level
+const sliderToZoom = (value: number) => {
+    const [min, max] = SLIDER_RANGE;
+    const normalized = (value - min) / (max - min); // Normalize slider value to 0-1
+    return MIN_ZOOM * Math.pow(MAX_ZOOM / MIN_ZOOM, normalized);
+};
+
+// Convert a logarithmic zoom level back to a linear slider value
+const zoomToSlider = (zoom: number) => {
+    const [min, max] = SLIDER_RANGE;
+    const normalized = Math.log(zoom / MIN_ZOOM) / Math.log(MAX_ZOOM / MIN_ZOOM);
+    return min + normalized * (max - min);
+};
+
 
 export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelect }: EventTimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [interactiveZoom, setInteractiveZoom] = useState(1);
+  const [interactiveZoom, setInteractiveZoom] = useState(zoomToSlider(1));
   const debounceTimer = useRef<NodeJS.Timeout>();
   
   const [isPanning, setIsPanning] = useState(false);
@@ -131,6 +149,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const newScrollLeft = timePercent * (viewWidth * newZoom) - viewWidth * focusPointPercent;
 
     setZoomLevel(newZoom);
+    setInteractiveZoom(zoomToSlider(newZoom));
     
     requestAnimationFrame(() => {
         if (timelineRef.current) {
@@ -142,8 +161,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   useEffect(() => {
       clearTimeout(debounceTimer.current);
       debounceTimer.current = setTimeout(() => {
-          if (interactiveZoom !== zoomLevel) {
-              applyZoom(interactiveZoom, zoomFocusPoint);
+          const newZoom = sliderToZoom(interactiveZoom);
+          if (newZoom !== zoomLevel) {
+              applyZoom(newZoom, zoomFocusPoint);
           }
       }, DEBOUNCE_DELAY);
 
@@ -156,7 +176,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
       
       const newZoomLevel = Math.max(zoomLevel, 5); 
       if (newZoomLevel !== zoomLevel) {
-        setInteractiveZoom(newZoomLevel); 
+        applyZoom(newZoomLevel, 0.5);
       }
 
       requestAnimationFrame(() => {
@@ -167,26 +187,25 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         }
       });
     }
-  }, [selectedEvent, getPosition, zoomLevel, timeRange]);
+  }, [selectedEvent, getPosition, zoomLevel, timeRange, applyZoom]);
   
   const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
     if (event.ctrlKey || event.metaKey) {
         event.preventDefault();
         const zoomFactor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
-        const newZoom = Math.max(1, Math.min(zoomLevel * zoomFactor, 100));
+        const newZoom = Math.max(MIN_ZOOM, Math.min(zoomLevel * zoomFactor, MAX_ZOOM));
 
         if (timelineRef.current) {
             const rect = timelineRef.current.getBoundingClientRect();
             const focusPercent = (event.clientX - rect.left) / rect.width;
-            setZoomFocusPoint(focusPercent);
-            setInteractiveZoom(newZoom); // Update interactive state
+            applyZoom(newZoom, focusPercent);
         }
     } else {
         if (timelineRef.current) {
             timelineRef.current.scrollLeft += event.deltaY;
         }
     }
-  }, [zoomLevel]);
+  }, [zoomLevel, applyZoom]);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (timelineRef.current) {
@@ -223,11 +242,10 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             const startPercent = (currentScrollLeft + startX) / totalWidth;
             const endPercent = (currentScrollLeft + endX) / totalWidth;
             
-            const newZoom = Math.min(100, zoomLevel * (1 / (endPercent - startPercent)));
+            const newZoom = Math.min(MAX_ZOOM, zoomLevel * (1 / (endPercent - startPercent)));
             const focus = startPercent + (endPercent - startPercent) / 2;
 
-            setInteractiveZoom(newZoom);
-            setZoomFocusPoint(focus);
+            applyZoom(newZoom, focus);
         }
     }
     
@@ -236,7 +254,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
      if(timelineRef.current) {
         timelineRef.current.style.cursor = 'grab';
     }
-  }, [selectionBox, zoomLevel]);
+  }, [selectionBox, zoomLevel, applyZoom]);
 
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (selectionBox) {
@@ -257,16 +275,14 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 
   const handleDoubleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (!timelineRef.current) return;
-    const newZoom = Math.min(100, zoomLevel * 2);
+    const newZoom = Math.min(MAX_ZOOM, zoomLevel * 2);
     const rect = timelineRef.current.getBoundingClientRect();
     const focusPercent = (event.clientX - rect.left) / rect.width;
-    setZoomFocusPoint(focusPercent);
-    setInteractiveZoom(newZoom);
-  }, [zoomLevel]);
+    applyZoom(newZoom, focusPercent);
+  }, [zoomLevel, applyZoom]);
   
   const handleResetZoom = () => {
-    setZoomFocusPoint(0.5);
-    setInteractiveZoom(1);
+    applyZoom(MIN_ZOOM, 0.5);
   };
 
   if (allEntries.length === 0) {
@@ -296,9 +312,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                   aria-label="Zoom level"
                   value={[interactiveZoom]}
                   onValueChange={(value) => setInteractiveZoom(value[0])}
-                  min={1}
-                  max={100}
-                  step={1}
+                  min={SLIDER_RANGE[0]}
+                  max={SLIDER_RANGE[1]}
+                  step={0.1}
                   className="w-full"
               />
               <ZoomIn className="w-4 h-4 text-muted-foreground" />
