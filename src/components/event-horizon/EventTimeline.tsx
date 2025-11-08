@@ -512,7 +512,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                                     style={style}
                                 >
                                     <div className={cn(
-                                        `w-2 h-2 rounded-full ${dotColor} transition-transform duration-200`, {
+                                        `w-1.5 h-1.5 rounded-full ${dotColor} transition-transform duration-200`, {
                                             "scale-150 ring-2 ring-offset-2 ring-offset-background ring-primary": isSelected,
                                         }
                                     )} />
@@ -572,6 +572,8 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
+
+    
 
     
 
