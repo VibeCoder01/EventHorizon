@@ -46,7 +46,6 @@ const DEBOUNCE_DELAY = 150; // ms
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 100;
 const SLIDER_RANGE = [1, 100];
-const HEATMAP_BINS = 200;
 
 // Convert a linear slider value to a logarithmic zoom level
 const sliderToZoom = (value: number) => {
@@ -93,27 +92,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     if (timeRange === 0) return 50;
     return ((new Date(timestamp).getTime() - minTime) / timeRange) * 100;
   }, [minTime, timeRange]);
-
-  const heatmapData = useMemo(() => {
-    if (timeRange === 0) return [];
-    
-    const bins = Array(HEATMAP_BINS).fill(0);
-    allEntries.forEach(entry => {
-      const position = getPosition(entry.timestamp);
-      const binIndex = Math.floor(position / (100 / HEATMAP_BINS));
-      if(binIndex >= 0 && binIndex < HEATMAP_BINS) {
-        bins[binIndex]++;
-      }
-    });
-
-    const maxInBin = Math.max(...bins);
-    if (maxInBin === 0) return [];
-
-    return bins.map(count => ({
-      count,
-      opacity: count > 0 ? 0.1 + (count / maxInBin) * 0.9 : 0
-    }));
-  }, [allEntries, getPosition, timeRange]);
 
   const updateVisibleEntries = useCallback(() => {
     if (!timelineRef.current) return;
@@ -421,17 +399,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                     className="relative h-full"
                     style={{ width: `${100 * zoomLevel}%` }}
                 >
-                    {/* Heatmap Background */}
-                    <div className="absolute inset-0 flex">
-                        {heatmapData.map((bin, index) => (
-                            <div 
-                                key={index}
-                                className="h-full flex-1 bg-primary"
-                                style={{ opacity: bin.opacity, transition: 'opacity 300ms ease-in-out' }}
-                            />
-                        ))}
-                    </div>
-
                     <div className="absolute top-1/2 left-0 w-full h-0.5 bg-secondary/50 -translate-y-1/2" />
 
                     {selectionBox && timelineRef.current && (
@@ -495,3 +462,5 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
+
+    
