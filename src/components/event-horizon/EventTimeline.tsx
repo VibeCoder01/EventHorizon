@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemo, useState, useRef, useCallback, useEffect } from "react";
-import { format, formatDistance } from "date-fns";
+import { format } from "date-fns";
 import type { LogEntry, EventLevel } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -95,6 +95,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const [zoomLevel, setZoomLevel] = useState(initialState?.zoom ?? 1);
   const [interactiveZoom, setInteractiveZoom] = useState(zoomToSlider(initialState?.zoom ?? 1));
   const debounceTimer = useRef<NodeJS.Timeout>();
+  const [zoomFocusPoint, setZoomFocusPoint] = useState(0.5);
   
   const [isPanning, setIsPanning] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -218,12 +219,12 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
       debounceTimer.current = setTimeout(() => {
           const newZoom = sliderToZoom(interactiveZoom);
           if (newZoom !== zoomLevel) {
-              applyZoom(newZoom, 0.5); // Always zoom to center with slider
+              applyZoom(newZoom, zoomFocusPoint); 
           }
       }, DEBOUNCE_DELAY);
 
       return () => clearTimeout(debounceTimer.current);
-  }, [interactiveZoom, zoomLevel, applyZoom]);
+  }, [interactiveZoom, zoomLevel, applyZoom, zoomFocusPoint]);
 
   useEffect(() => {
     if (selectedEvent && timelineRef.current && timeRange > 0) {
@@ -253,6 +254,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         if (timelineRef.current) {
             const rect = timelineRef.current.getBoundingClientRect();
             const focusPercent = (event.clientX - rect.left) / rect.width;
+            setZoomFocusPoint(focusPercent);
             applyZoom(newZoom, focusPercent);
             setInteractiveZoom(zoomToSlider(newZoom));
         }
@@ -339,6 +341,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const newZoom = Math.min(MAX_ZOOM, zoomLevel * 2);
     const rect = timelineRef.current.getBoundingClientRect();
     const focusPercent = (event.clientX - rect.left) / rect.width;
+    setZoomFocusPoint(focusPercent);
     applyZoom(newZoom, focusPercent);
     setInteractiveZoom(zoomToSlider(newZoom));
   }, [zoomLevel, applyZoom]);
@@ -480,7 +483,10 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             >
                 <div 
                     className="relative h-full"
-                    style={{ width: `${100 * zoomLevel}%` }}
+                    style={{ 
+                      width: `${100 * zoomLevel}%`,
+                      paddingRight: timelineRef.current ? `${(timelineRef.current.clientWidth / 2)}px`: '50%',
+                    }}
                 >
                     {/* Vertical Grid Lines */}
                     {timeTicks.map(tick => (
@@ -574,7 +580,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                     <div className="absolute bottom-0 left-0 w-full h-8">
                         {timeTicks.map(tick => (
                              <div key={tick.time} className="absolute h-full top-0" style={{ left: `${getPosition(tick.time)}%`}}>
-                                <div className={cn("w-px bg-secondary/50", tick.isMajor ? "h-3" : "h-2")}></div>
+                                <div className={cn("w-px bg-primary/20", tick.isMajor ? "h-3" : "h-2")}></div>
                                 {tick.isMajor && tick.label && (
                                     <div className="absolute top-4 -translate-x-1/2 text-xs text-muted-foreground">
                                         {tick.label}
@@ -592,3 +598,5 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
+
+  
