@@ -93,7 +93,6 @@ const getNiceTimeInterval = (rangeMs: number, targetTicks = 10) => {
 
 export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelect, initialState, onStateChange }: EventTimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(initialState?.zoom ?? 1);
-  const [zoomFocusPoint, setZoomFocusPoint] = useState(0.5);
   const [interactiveZoom, setInteractiveZoom] = useState(zoomToSlider(initialState?.zoom ?? 1));
   const debounceTimer = useRef<NodeJS.Timeout>();
   
@@ -121,25 +120,35 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const getPosition = useCallback((timestamp: Date | number) => {
     if (timeRange === 0) return 0;
     const time = timestamp instanceof Date ? timestamp.getTime() : timestamp;
+    const timePosition = ((time - minTime) / timeRange);
+    
     const clientWidth = timelineRef.current?.clientWidth ?? 0;
     const totalWidth = clientWidth * zoomLevel;
-    const timePosition = ((time - minTime) / timeRange) * totalWidth;
     
-    return timePosition;
+    // We give a half-viewport padding on each side to allow first/last events to be centered
+    const paddedWidth = totalWidth + clientWidth;
+    
+    return (timePosition * totalWidth) + (clientWidth / 2);
   }, [minTime, timeRange, zoomLevel]);
 
   const updateVisibleEntries = useCallback(() => {
     if (!timelineRef.current) return;
     
     const { scrollLeft, clientWidth } = timelineRef.current;
-    const timelineWidth = clientWidth * zoomLevel;
+    
+    // Calculate visible time range based on scroll position
+    const totalWidth = clientWidth * zoomLevel;
+    const startOffset = scrollLeft - (clientWidth / 2);
+    const endOffset = scrollLeft + clientWidth + (clientWidth / 2);
 
-    const startPercent = (scrollLeft / timelineWidth);
-    const endPercent = ((scrollLeft + clientWidth) / timelineWidth);
+    const startPercent = Math.max(0, startOffset / totalWidth);
+    const endPercent = Math.min(1, endOffset / totalWidth);
+    
     const visibleStartTime = minTime + (startPercent * timeRange);
     const visibleEndTime = minTime + (endPercent * timeRange);
     setVisibleTimeRange({ start: visibleStartTime, end: visibleEndTime });
 
+    // Culling logic: only render entries that are within the viewport + a buffer
     const buffer = clientWidth * 0.5;
     const viewStart = scrollLeft - buffer;
     const viewEnd = scrollLeft + clientWidth + buffer;
@@ -192,9 +201,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const viewWidth = timeline.clientWidth;
     
     const pointInTimeline = oldScrollLeft + viewWidth * focusPointPercent;
-    const timePercent = pointInTimeline / (viewWidth * oldZoom);
+    const timePercent = (pointInTimeline - viewWidth/2) / (viewWidth * oldZoom);
     
-    const newScrollLeft = timePercent * (viewWidth * newZoom) - viewWidth * focusPointPercent;
+    const newScrollLeft = timePercent * (viewWidth * newZoom) - viewWidth * focusPointPercent + viewWidth/2;
 
     setZoomLevel(newZoom);
     onStateChange({ zoom: newZoom, scroll: newScrollLeft });
@@ -219,13 +228,14 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
       debounceTimer.current = setTimeout(() => {
           const newZoom = sliderToZoom(interactiveZoom);
           if (newZoom !== zoomLevel) {
-              const focusPoint = zoomFocusPoint;
+              const rect = timelineRef.current?.getBoundingClientRect();
+              const focusPoint = rect ? (rect.width / 2) / rect.width : 0.5;
               applyZoom(newZoom, focusPoint); 
           }
       }, DEBOUNCE_DELAY);
 
       return () => clearTimeout(debounceTimer.current);
-  }, [interactiveZoom, zoomLevel, applyZoom, zoomFocusPoint]);
+  }, [interactiveZoom, zoomLevel, applyZoom]);
 
   useEffect(() => {
     if (selectedEvent && timelineRef.current && timeRange > 0) {
@@ -289,12 +299,13 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 
         if (selectionWidth > 10) { 
             const currentScrollLeft = timelineRef.current.scrollLeft;
-            const totalWidth = rect.width * zoomLevel;
+            const clientWidth = timelineRef.current.clientWidth;
+            const totalWidth = clientWidth * zoomLevel;
 
-            const startPercent = (currentScrollLeft + startX) / totalWidth;
+            const startPercent = (currentScrollLeft + startX - clientWidth/2) / totalWidth;
             
             const newZoom = Math.min(MAX_ZOOM, zoomLevel * (rect.width / selectionWidth));
-            const newScroll = startPercent * (rect.width * newZoom);
+            const newScroll = startPercent * (clientWidth * newZoom);
             
             setZoomLevel(newZoom);
             setInteractiveZoom(zoomToSlider(newZoom));
@@ -319,9 +330,15 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (selectionBox) {
         setSelectionBox({ ...selectionBox, endX: event.clientX });
+        return; // Don't pan while selecting
     }
     if (isPanning && timelineRef.current) {
-      timelineRef.current.scrollLeft -= event.movementX;
+        const timeline = timelineRef.current;
+        const newScrollLeft = timeline.scrollLeft - event.movementX;
+        
+        // Enforce boundaries
+        const maxScrollLeft = timeline.scrollWidth - timeline.clientWidth;
+        timeline.scrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft));
     }
   }, [isPanning, selectionBox]);
 
@@ -356,33 +373,36 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const { interval, format: tickFormat } = getNiceTimeInterval(visibleRangeMs, 10);
     
     const ticks = [];
-    const startTime = visibleTimeRange.start;
+    // Add a buffer to the start time to catch ticks that are just off-screen
+    const startTime = visibleTimeRange.start - interval;
     let tickTime = Math.floor(startTime / interval) * interval;
     const minorInterval = interval / 5;
+    
+    // Add buffer to the end time
+    const endTime = visibleTimeRange.end + interval;
 
-    while (tickTime < visibleTimeRange.end + interval) {
-        if (tickTime >= visibleTimeRange.start - interval) {
-            
-            for(let i = 1; i < 5; i++) {
-                const minorTickTime = tickTime + (minorInterval * i);
-                if (minorTickTime < visibleTimeRange.end + interval) {
-                     ticks.push({
-                        time: minorTickTime,
-                        label: null,
-                        isMajor: false
-                    });
-                }
+    while (tickTime < endTime) {
+        
+        for(let i = 1; i < 5; i++) {
+            const minorTickTime = tickTime + (minorInterval * i);
+            if (minorTickTime < endTime && minorTickTime > startTime) {
+                 ticks.push({
+                    time: minorTickTime,
+                    label: null,
+                    isMajor: false
+                });
             }
-            
-            ticks.push({
-                time: tickTime,
-                label: format(new Date(tickTime), tickFormat),
-                isMajor: true,
-            });
         }
+        
+        ticks.push({
+            time: tickTime,
+            label: format(new Date(tickTime), tickFormat),
+            isMajor: true,
+        });
+        
         tickTime += interval;
     }
-    return ticks;
+    return ticks.filter(t => t.time >= startTime && t.time <= endTime);
   }, [visibleTimeRange, timeRange]);
 
   if (allEntries.length === 0) {
@@ -407,11 +427,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   };
 
   const isHighDensity = visibleEntries.length > HIGH_DENSITY_THRESHOLD;
-
-  const getPositionFromPercent = (percent: number) => {
-    if (!timelineRef.current) return 0;
-    return (percent / 100) * (timelineRef.current.clientWidth * zoomLevel);
-  };
 
   return (
     <Card className="h-[600px] bg-card/50 flex flex-col">
@@ -474,7 +489,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         <TooltipProvider>
             <div 
               ref={timelineRef}
-              className="w-full h-full overflow-hidden relative cursor-grab"
+              className="w-full h-full relative cursor-grab overflow-x-auto"
               onWheel={handleWheel}
               onMouseDown={handleMouseDown}
               onMouseUp={handleMouseUp}
@@ -485,9 +500,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                 <div 
                     className="relative h-full"
                     style={{ 
-                      width: timelineRef.current ? `${getPosition(maxTime)}px` : '100%',
-                      paddingLeft: timelineRef.current ? `${timelineRef.current.clientWidth / 2}px` : '50%',
-                      paddingRight: timelineRef.current ? `${timelineRef.current.clientWidth / 2}px` : '50%',
+                      width: timelineRef.current ? `${(timelineRef.current.clientWidth * zoomLevel) + timelineRef.current.clientWidth}px` : '200%',
                     }}
                 >
                     {/* Vertical Grid Lines */}
@@ -600,9 +613,3 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
-
-  
-
-    
-
-    
