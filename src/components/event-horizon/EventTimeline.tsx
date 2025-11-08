@@ -296,21 +296,29 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         const startX = Math.min(selectionBox.startX, selectionBox.endX) - rect.left;
         const endX = Math.max(selectionBox.startX, selectionBox.endX) - rect.left;
         const selectionWidth = endX - startX;
+        const selectionCenterScreenX = startX + selectionWidth / 2;
 
         if (selectionWidth > 10) { 
-            const currentScrollLeft = timelineRef.current.scrollLeft;
-            const clientWidth = timelineRef.current.clientWidth;
+            const timeline = timelineRef.current;
+            const currentScrollLeft = timeline.scrollLeft;
+            const clientWidth = timeline.clientWidth;
             const totalWidth = clientWidth * zoomLevel;
 
-            const startPercent = (currentScrollLeft + startX - clientWidth/2) / totalWidth;
-            
+            // Find the time percentage where the selection starts
+            const selectionStartOnCanvas = currentScrollLeft + startX;
+            const selectionStartPercent = (selectionStartOnCanvas - clientWidth/2) / totalWidth;
+
+            // Calculate the new zoom level
             const newZoom = Math.min(MAX_ZOOM, zoomLevel * (rect.width / selectionWidth));
-            const newScroll = startPercent * (clientWidth * newZoom);
+            
+            // Calculate the new scroll position to center the selection
+            const selectionWidthInNewZoom = selectionWidth * (newZoom / zoomLevel);
+            const selectionStartInNewZoom = (selectionStartPercent * (clientWidth * newZoom)) + clientWidth/2;
+            const newScroll = selectionStartInNewZoom + (selectionWidthInNewZoom / 2) - (clientWidth / 2);
             
             setZoomLevel(newZoom);
             setInteractiveZoom(zoomToSlider(newZoom));
             onStateChange({ zoom: newZoom, scroll: newScroll });
-
 
             requestAnimationFrame(() => {
                 if (timelineRef.current) {
