@@ -35,7 +35,7 @@ const levelConfig: Record<EventLevel, { icon: React.ElementType, color: string, 
     'Alert': { icon: ShieldAlert, color: 'text-pink-500', dotColor: 'bg-pink-500' },
 };
 
-const MAX_VERTICAL_JITTER = 250; 
+const MAX_VERTICAL_JITTER = 450; 
 const HIGH_DENSITY_THRESHOLD = 500; // Switch to dots if more than this many events are visible
 
 const pseudoRandom = (seed: number) => {
@@ -63,8 +63,8 @@ const zoomToSlider = (zoom: number) => {
 };
 
 const timeIntervals = [
-    { threshold: 100, unit: "millisecond", format: "HH:mm:ss.SSS" },
-    { threshold: 1000 * 5, unit: "second", format: "HH:mm:ss" },
+    { threshold: 1, unit: "millisecond", format: "HH:mm:ss.SSS" },
+    { threshold: 1000, unit: "second", format: "HH:mm:ss" },
     { threshold: 1000 * 60, unit: "minute", format: "HH:mm" },
     { threshold: 1000 * 60 * 60, unit: "hour", format: "HH:mm" },
     { threshold: 1000 * 60 * 60 * 24, unit: "day", format: "MMM d" },
@@ -73,17 +73,20 @@ const timeIntervals = [
 ];
 
 const getNiceTimeInterval = (rangeMs: number, targetTicks = 10) => {
-    const interval = rangeMs / targetTicks;
-    for (let i = timeIntervals.length - 1; i >= 0; i--) {
-        const t = timeIntervals[i];
-        const multiples = [1, 2, 5, 10, 15, 30]; // e.g. 1 sec, 2 sec, 5 sec
+    const idealInterval = rangeMs / targetTicks;
+
+    for (const interval of timeIntervals) {
+        // Common multiples of time units (1, 2, 5, 10, 15, 30)
+        const multiples = [1, 2, 5, 10, 15, 30]; 
         for (const m of multiples) {
-            const currentInterval = t.threshold * m;
-            if (interval < currentInterval) {
-                return { interval: currentInterval, format: t.format };
+            const currentInterval = interval.threshold * m;
+            if (idealInterval < currentInterval) {
+                return { interval: currentInterval, format: interval.format };
             }
         }
     }
+    
+    // Fallback for very small ranges
     return { interval: timeIntervals[0].threshold, format: timeIntervals[0].format };
 };
 
@@ -354,7 +357,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const timeTicks = useMemo(() => {
     if (!timeRange || visibleTimeRange.start === 0) return [];
     
-    const visibleRangeMs = (visibleTimeRange.end - visibleTimeRange.start);
+    const visibleRangeMs = visibleTimeRange.end - visibleTimeRange.start;
+    if (visibleRangeMs <= 0) return [];
+    
     const { interval, format: tickFormat } = getNiceTimeInterval(visibleRangeMs, 10);
     
     const ticks = [];
@@ -521,7 +526,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                                       e.stopPropagation();
                                       onEventSelect(isSelected ? null : entry.id);
                                     }}
-                                    className="absolute top-1/2 -translate-x-1/2 cursor-pointer"
+                                    className="absolute top-1/2 cursor-pointer"
                                     style={style}
                                 >
                                     <div className={cn(
