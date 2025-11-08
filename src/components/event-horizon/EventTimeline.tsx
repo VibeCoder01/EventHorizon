@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemo, useState, useRef, useCallback, useEffect } from "react";
-import { format } from "date-fns";
+import { format, formatDistance } from "date-fns";
 import type { LogEntry, EventLevel } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -59,6 +59,31 @@ const zoomToSlider = (zoom: number) => {
     const [min, max] = SLIDER_RANGE;
     const normalized = Math.log(zoom / MIN_ZOOM) / Math.log(MAX_ZOOM / MIN_ZOOM);
     return min + normalized * (max - min);
+};
+
+const timeIntervals = [
+    { threshold: 100, unit: "millisecond", format: "HH:mm:ss.SSS" },
+    { threshold: 1000 * 5, unit: "second", format: "HH:mm:ss" },
+    { threshold: 1000 * 60, unit: "minute", format: "HH:mm" },
+    { threshold: 1000 * 60 * 60, unit: "hour", format: "HH:mm" },
+    { threshold: 1000 * 60 * 60 * 24, unit: "day", format: "MMM d" },
+    { threshold: 1000 * 60 * 60 * 24 * 30, unit: "month", format: "MMM" },
+    { threshold: 1000 * 60 * 60 * 24 * 365, unit: "year", format: "yyyy" },
+];
+
+const getNiceTimeInterval = (rangeMs: number, targetTicks = 10) => {
+    const interval = rangeMs / targetTicks;
+    for (let i = timeIntervals.length - 1; i >= 0; i--) {
+        const t = timeIntervals[i];
+        const multiples = [1, 2, 5, 10, 15, 30]; // e.g. 1 sec, 2 sec, 5 sec
+        for (const m of multiples) {
+            const currentInterval = t.threshold * m;
+            if (interval < currentInterval) {
+                return { interval: currentInterval, format: t.format };
+            }
+        }
+    }
+    return { interval: timeIntervals[0].threshold, format: timeIntervals[0].format };
 };
 
 
@@ -324,6 +349,30 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     setInteractiveZoom(zoomToSlider(MIN_ZOOM));
   };
 
+  const timeTicks = useMemo(() => {
+    if (!timeRange) return [];
+    
+    const visibleRangeMs = (visibleTimeRange.end - visibleTimeRange.start)
+    const { interval, format: tickFormat } = getNiceTimeInterval(visibleRangeMs, 10);
+    
+    const ticks = [];
+    const startTime = visibleTimeRange.start;
+    let tickTime = Math.floor(startTime / interval) * interval;
+
+    while (tickTime < visibleTimeRange.end) {
+        if (tickTime >= visibleTimeRange.start) {
+            const isMajor = tickTime % (interval * 5) === 0;
+            ticks.push({
+                time: tickTime,
+                label: format(new Date(tickTime), tickFormat),
+                isMajor: isMajor,
+            });
+        }
+        tickTime += interval / 5; // minor ticks
+    }
+    return ticks;
+  }, [visibleTimeRange, timeRange]);
+
   if (allEntries.length === 0) {
     return (
         <Card className="h-full bg-card/50 flex items-center justify-center">
@@ -471,6 +520,22 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                             </Tooltip>
                         )
                     })}
+
+                    <div className="absolute bottom-0 left-0 w-full h-6">
+                        {timeTicks.map(tick => {
+                             const pos = ((tick.time - minTime) / timeRange) * 100;
+                             return (
+                                <div key={tick.time} className="absolute h-full top-0" style={{ left: `${pos}%`}}>
+                                    <div className={cn("w-px bg-secondary/30", tick.isMajor ? "h-3" : "h-2")}></div>
+                                    {tick.isMajor && (
+                                        <div className="absolute -bottom-4 text-xs text-muted-foreground -translate-x-1/2">
+                                            {tick.label}
+                                        </div>
+                                    )}
+                                </div>
+                             )
+                        })}
+                    </div>
                 </div>
             </div>
         </TooltipProvider>
