@@ -95,7 +95,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const [zoomLevel, setZoomLevel] = useState(initialState?.zoom ?? 1);
   const [interactiveZoom, setInteractiveZoom] = useState(zoomToSlider(initialState?.zoom ?? 1));
   const debounceTimer = useRef<NodeJS.Timeout>();
-  const [zoomFocusPoint, setZoomFocusPoint] = useState(0.5);
   
   const [isPanning, setIsPanning] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -119,10 +118,14 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const timeRange = maxTime - minTime;
   
   const getPosition = useCallback((timestamp: Date | number) => {
-    if (timeRange === 0) return 50;
+    if (timeRange === 0) return 0;
     const time = timestamp instanceof Date ? timestamp.getTime() : timestamp;
-    return ((time - minTime) / timeRange) * 100;
-  }, [minTime, timeRange]);
+    const clientWidth = timelineRef.current?.clientWidth ?? 0;
+    const totalWidth = clientWidth * zoomLevel;
+    const timePosition = ((time - minTime) / timeRange) * totalWidth;
+    
+    return timePosition;
+  }, [minTime, timeRange, zoomLevel]);
 
   const updateVisibleEntries = useCallback(() => {
     if (!timelineRef.current) return;
@@ -130,7 +133,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const { scrollLeft, clientWidth } = timelineRef.current;
     const timelineWidth = clientWidth * zoomLevel;
 
-    // Update visible time range
     const startPercent = (scrollLeft / timelineWidth);
     const endPercent = ((scrollLeft + clientWidth) / timelineWidth);
     const visibleStartTime = minTime + (startPercent * timeRange);
@@ -141,12 +143,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const viewStart = scrollLeft - buffer;
     const viewEnd = scrollLeft + clientWidth + buffer;
 
-    const startPosPercent = (viewStart / timelineWidth) * 100;
-    const endPosPercent = (viewEnd / timelineWidth) * 100;
-
     const visible = entries.filter(entry => {
       const position = getPosition(entry.timestamp);
-      return position >= startPosPercent && position <= endPosPercent;
+      return position >= viewStart && position <= viewEnd;
     });
 
     setVisibleEntries(visible);
@@ -219,17 +218,16 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
       debounceTimer.current = setTimeout(() => {
           const newZoom = sliderToZoom(interactiveZoom);
           if (newZoom !== zoomLevel) {
-              applyZoom(newZoom, zoomFocusPoint); 
+              const focusPoint = timelineRef.current ? 0.5 : 0; // Center focus
+              applyZoom(newZoom, focusPoint); 
           }
       }, DEBOUNCE_DELAY);
 
       return () => clearTimeout(debounceTimer.current);
-  }, [interactiveZoom, zoomLevel, applyZoom, zoomFocusPoint]);
+  }, [interactiveZoom, zoomLevel, applyZoom]);
 
   useEffect(() => {
     if (selectedEvent && timelineRef.current && timeRange > 0) {
-      const positionPercent = getPosition(selectedEvent.timestamp);
-      
       const newZoomLevel = Math.max(zoomLevel, 5); 
       if (newZoomLevel !== zoomLevel) {
         applyZoom(newZoomLevel, 0.5);
@@ -237,8 +235,8 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 
       requestAnimationFrame(() => {
         if (timelineRef.current) {
-          const timelineWidth = timelineRef.current.scrollWidth;
-          const targetScrollLeft = (positionPercent / 100) * timelineWidth - (timelineRef.current.clientWidth / 2);
+          const position = getPosition(selectedEvent.timestamp);
+          const targetScrollLeft = position - (timelineRef.current.clientWidth / 2);
           timelineRef.current.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
         }
       });
@@ -254,7 +252,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         if (timelineRef.current) {
             const rect = timelineRef.current.getBoundingClientRect();
             const focusPercent = (event.clientX - rect.left) / rect.width;
-            setZoomFocusPoint(focusPercent);
             applyZoom(newZoom, focusPercent);
             setInteractiveZoom(zoomToSlider(newZoom));
         }
@@ -294,7 +291,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             const totalWidth = rect.width * zoomLevel;
 
             const startPercent = (currentScrollLeft + startX) / totalWidth;
-            const endPercent = (currentScrollLeft + endX) / totalWidth;
             
             const newZoom = Math.min(MAX_ZOOM, zoomLevel * (rect.width / selectionWidth));
             const newScroll = startPercent * (rect.width * newZoom);
@@ -341,7 +337,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const newZoom = Math.min(MAX_ZOOM, zoomLevel * 2);
     const rect = timelineRef.current.getBoundingClientRect();
     const focusPercent = (event.clientX - rect.left) / rect.width;
-    setZoomFocusPoint(focusPercent);
     applyZoom(newZoom, focusPercent);
     setInteractiveZoom(zoomToSlider(newZoom));
   }, [zoomLevel, applyZoom]);
@@ -352,7 +347,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   };
 
   const timeTicks = useMemo(() => {
-    if (!timeRange || visibleTimeRange.start === 0) return [];
+    if (!timeRange || visibleTimeRange.start === 0 || !timelineRef.current) return [];
     
     const visibleRangeMs = visibleTimeRange.end - visibleTimeRange.start;
     if (visibleRangeMs <= 0) return [];
@@ -411,6 +406,11 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   };
 
   const isHighDensity = visibleEntries.length > HIGH_DENSITY_THRESHOLD;
+
+  const getPositionFromPercent = (percent: number) => {
+    if (!timelineRef.current) return 0;
+    return (percent / 100) * (timelineRef.current.clientWidth * zoomLevel);
+  };
 
   return (
     <Card className="h-[600px] bg-card/50 flex flex-col">
@@ -484,8 +484,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                 <div 
                     className="relative h-full"
                     style={{ 
-                      width: `${100 * zoomLevel}%`,
-                      paddingRight: timelineRef.current ? `${(timelineRef.current.clientWidth / 2)}px`: '50%',
+                      width: timelineRef.current ? `${timelineRef.current.clientWidth * zoomLevel}px` : '100%',
+                      paddingLeft: timelineRef.current ? `${timelineRef.current.clientWidth / 2}px` : '50%',
+                      paddingRight: timelineRef.current ? `${timelineRef.current.clientWidth / 2}px` : '50%',
                     }}
                 >
                     {/* Vertical Grid Lines */}
@@ -493,7 +494,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                         <div 
                             key={`grid-${tick.time}`} 
                             className="absolute top-0 bottom-0"
-                            style={{ left: `${getPosition(tick.time)}%`}}
+                            style={{ left: `${getPosition(tick.time)}px`}}
                         >
                             <div className={cn("w-px h-full", tick.isMajor ? "bg-primary/20" : "bg-primary/10")}></div>
                         </div>
@@ -505,7 +506,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                         <div
                             className="absolute top-0 h-full bg-primary/20 border-2 border-primary"
                             style={{
-                                left: `${Math.min(selectionBox.startX, selectionBox.endX) - timelineRef.current.getBoundingClientRect().left}px`,
+                                left: `${timelineRef.current.scrollLeft + Math.min(selectionBox.startX, selectionBox.endX) - timelineRef.current.getBoundingClientRect().left}px`,
                                 width: `${Math.abs(selectionBox.endX - selectionBox.startX)}px`,
                             }}
                         />
@@ -523,7 +524,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                         const horizontalJitterOffset = (pseudoRandom(entry.id * 3) - 0.5) * horizontalJitter;
 
                         const style = { 
-                            left: `${position}%`,
+                            left: `${position}px`,
                             transform: `translate(calc(-50% + ${horizontalJitterOffset}px), calc(-50% + ${verticalJitter}px))`,
                             zIndex: isSelected ? 10 : 1,
                         };
@@ -579,7 +580,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 
                     <div className="absolute bottom-0 left-0 w-full h-8">
                         {timeTicks.map(tick => (
-                             <div key={tick.time} className="absolute h-full top-0" style={{ left: `${getPosition(tick.time)}%`}}>
+                             <div key={tick.time} className="absolute h-full top-0" style={{ left: `${getPosition(tick.time)}px`}}>
                                 <div className={cn("w-px bg-primary/20", tick.isMajor ? "h-3" : "h-2")}></div>
                                 {tick.isMajor && tick.label && (
                                     <div className="absolute top-4 -translate-x-1/2 text-xs text-muted-foreground">
@@ -600,3 +601,5 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 }
 
   
+
+    
