@@ -14,6 +14,7 @@ interface FilterControlsProps {
   setFilters: (filters: FilterState) => void;
   allLevels: EventLevel[];
   availableLevels: EventLevel[];
+  availableSources: EventSource[];
   groupedSources: SourceGroup[];
   onLogsParsed: (logs: Omit<LogEntry, 'id'>[]) => void;
   onError: (errorMessage: string) => void;
@@ -24,6 +25,7 @@ export function FilterControls({
     setFilters, 
     allLevels, 
     availableLevels,
+    availableSources,
     groupedSources,
     onLogsParsed,
     onError
@@ -42,8 +44,6 @@ export function FilterControls({
             : filters.sources.filter(s => s !== source);
         setFilters({ ...filters, sources: newSources });
     };
-
-    const allAvailableSources = groupedSources.flatMap(g => g.sources);
     
   return (
     <Card className="h-full bg-card/50">
@@ -64,13 +64,12 @@ export function FilterControls({
                                 id={`level-${level}`} 
                                 checked={filters.levels.includes(level)}
                                 onCheckedChange={(checked) => handleLevelChange(level, !!checked)}
-                                disabled={!isAvailable}
                             />
                             <Label 
                                 htmlFor={`level-${level}`} 
                                 className={cn(
-                                    "font-normal text-foreground",
-                                    isAvailable ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground/50"
+                                    "font-normal cursor-pointer",
+                                    !isAvailable && "text-muted-foreground/50"
                                 )}
                             >
                                 {level}
@@ -89,20 +88,19 @@ export function FilterControls({
                         <p className="font-medium text-xs text-foreground truncate" title={group.filename}>{group.filename}</p>
                         <div className="pl-2 space-y-2">
                             {group.sources.map((source) => {
-                                const isAvailable = allAvailableSources.includes(source);
+                                const isAvailable = availableSources.includes(source);
                                 return (
                                     <div key={source} className="flex items-center space-x-3">
                                         <Checkbox 
                                             id={`source-${group.filename}-${source}`}
                                             checked={filters.sources.includes(source)}
                                             onCheckedChange={(checked) => handleSourceChange(source, !!checked)}
-                                            disabled={!isAvailable}
                                         />
                                         <Label 
                                             htmlFor={`source-${group.filename}-${source}`} 
                                             className={cn(
-                                                "font-normal text-foreground",
-                                                isAvailable ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground/50"
+                                                "font-normal cursor-pointer",
+                                                !isAvailable && "text-muted-foreground/50"
                                             )}
                                         >
                                             {source}

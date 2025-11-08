@@ -23,8 +23,8 @@ export default function Home() {
   });
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   
-  const { availableLevels, groupedSources } = useMemo(() => {
-    if (!logEntries.length) return { availableLevels: [], groupedSources: [] };
+  const { initialAvailableLevels, groupedSources } = useMemo(() => {
+    if (!logEntries.length) return { initialAvailableLevels: [], groupedSources: [] };
 
     const levels = new Set(logEntries.map(entry => entry.level));
     const sourcesByFile = logEntries.reduce((acc, entry) => {
@@ -41,10 +41,64 @@ export default function Home() {
     })).sort((a, b) => a.filename.localeCompare(b.filename));
 
     return { 
-      availableLevels: Array.from(levels),
+      initialAvailableLevels: Array.from(levels),
       groupedSources: grouped,
     };
   }, [logEntries]);
+
+  const filteredEntries = useMemo(() => {
+    if (!logEntries.length) return [];
+    return logEntries.filter((entry) => {
+      const levelMatch = filters.levels.length === 0 || filters.levels.includes(entry.level);
+      const sourceMatch = filters.sources.length === 0 || filters.sources.includes(entry.source);
+      return levelMatch && sourceMatch;
+    });
+  }, [logEntries, filters]);
+
+  const { availableLevels, availableSources } = useMemo(() => {
+    const levelsInFiltered = new Set<EventLevel>();
+    const sourcesInFiltered = new Set<EventSource>();
+
+    // If no filters are active, all initially available options are available.
+    if (filters.levels.length === 0 && filters.sources.length === 0) {
+      initialAvailableLevels.forEach(l => levelsInFiltered.add(l));
+      groupedSources.flatMap(g => g.sources).forEach(s => sourcesInFiltered.add(s));
+    } else {
+      // Determine available sources based on selected levels
+      const levelFilteredEntries = filters.levels.length > 0
+        ? logEntries.filter(entry => filters.levels.includes(entry.level))
+        : logEntries;
+
+      levelFilteredEntries.forEach(entry => sourcesInFiltered.add(entry.source));
+
+      // Determine available levels based on selected sources
+      const sourceFilteredEntries = filters.sources.length > 0
+        ? logEntries.filter(entry => filters.sources.includes(entry.source))
+        : logEntries;
+
+      sourceFilteredEntries.forEach(entry => levelsInFiltered.add(entry.level));
+
+      // If both filters are active, the available options are the intersection
+      if (filters.levels.length > 0 && filters.sources.length > 0) {
+          const finalAvailableLevels = new Set<EventLevel>();
+          const finalAvailableSources = new Set<EventSource>();
+
+          filteredEntries.forEach(entry => {
+              finalAvailableLevels.add(entry.level);
+              finalAvailableSources.add(entry.source);
+          });
+          return {
+              availableLevels: Array.from(finalAvailableLevels),
+              availableSources: Array.from(finalAvailableSources)
+          };
+      }
+    }
+    
+    return {
+      availableLevels: filters.sources.length > 0 ? Array.from(levelsInFiltered) : initialAvailableLevels,
+      availableSources: filters.levels.length > 0 ? Array.from(sourcesInFiltered) : groupedSources.flatMap(g => g.sources),
+    };
+  }, [filters, logEntries, initialAvailableLevels, groupedSources, filteredEntries]);
 
   const handleLogsParsed = (newLogs: Omit<LogEntry, 'id'>[]) => {
     const lastId = logEntries.length > 0 ? logEntries[logEntries.length - 1].id : -1;
@@ -77,15 +131,6 @@ export default function Home() {
     setFilters({ levels: [], sources: [] });
     setSelectedEventId(null);
   }
-
-  const filteredEntries = useMemo(() => {
-    if (!logEntries.length) return [];
-    return logEntries.filter((entry) => {
-      const levelMatch = filters.levels.length === 0 || filters.levels.includes(entry.level);
-      const sourceMatch = filters.sources.length === 0 || filters.sources.includes(entry.source);
-      return levelMatch && sourceMatch;
-    });
-  }, [logEntries, filters]);
 
   const selectedEvent = useMemo(() => {
     if (selectedEventId === null) return null;
@@ -128,6 +173,7 @@ export default function Home() {
                         setFilters={setFiltersCallback}
                         allLevels={ALL_LEVELS}
                         availableLevels={availableLevels}
+                        availableSources={availableSources}
                         groupedSources={groupedSources}
                         onLogsParsed={onLogsParsedCallback}
                         onError={onErrorCallback}
