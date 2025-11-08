@@ -93,6 +93,7 @@ const getNiceTimeInterval = (rangeMs: number, targetTicks = 10) => {
 
 export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelect, initialState, onStateChange }: EventTimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(initialState?.zoom ?? 1);
+  const [zoomFocusPoint, setZoomFocusPoint] = useState(0.5);
   const [interactiveZoom, setInteractiveZoom] = useState(zoomToSlider(initialState?.zoom ?? 1));
   const debounceTimer = useRef<NodeJS.Timeout>();
   
@@ -218,13 +219,13 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
       debounceTimer.current = setTimeout(() => {
           const newZoom = sliderToZoom(interactiveZoom);
           if (newZoom !== zoomLevel) {
-              const focusPoint = timelineRef.current ? 0.5 : 0; // Center focus
+              const focusPoint = zoomFocusPoint;
               applyZoom(newZoom, focusPoint); 
           }
       }, DEBOUNCE_DELAY);
 
       return () => clearTimeout(debounceTimer.current);
-  }, [interactiveZoom, zoomLevel, applyZoom]);
+  }, [interactiveZoom, zoomLevel, applyZoom, zoomFocusPoint]);
 
   useEffect(() => {
     if (selectedEvent && timelineRef.current && timeRange > 0) {
@@ -473,7 +474,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         <TooltipProvider>
             <div 
               ref={timelineRef}
-              className="w-full h-full overflow-auto relative cursor-grab"
+              className="w-full h-full overflow-hidden relative cursor-grab"
               onWheel={handleWheel}
               onMouseDown={handleMouseDown}
               onMouseUp={handleMouseUp}
@@ -484,7 +485,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                 <div 
                     className="relative h-full"
                     style={{ 
-                      width: timelineRef.current ? `${timelineRef.current.clientWidth * zoomLevel}px` : '100%',
+                      width: timelineRef.current ? `${getPosition(maxTime)}px` : '100%',
                       paddingLeft: timelineRef.current ? `${timelineRef.current.clientWidth / 2}px` : '50%',
                       paddingRight: timelineRef.current ? `${timelineRef.current.clientWidth / 2}px` : '50%',
                     }}
@@ -601,5 +602,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 }
 
   
+
+    
 
     
