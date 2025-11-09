@@ -111,9 +111,16 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
       return { minTime: 0, maxTime: 0 };
     }
     const timestamps = allEntries.map(e => new Date(e.timestamp).getTime());
+    const minTs = Math.min(...timestamps);
+    const maxTs = Math.max(...timestamps);
+    const logDuration = maxTs - minTs;
+
+    // Add 10% slack space on each side
+    const slack = logDuration === 0 ? 1000 : logDuration * 0.1;
+
     return {
-      minTime: Math.min(...timestamps),
-      maxTime: Math.max(...timestamps),
+      minTime: minTs - slack,
+      maxTime: maxTs + slack,
     };
   }, [allEntries]);
 
@@ -182,35 +189,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     (timeline: HTMLDivElement) => {
       const baseMin = 0;
       const baseMax = Math.max(0, timeline.scrollWidth - timeline.clientWidth);
-
-      if (timeRange <= 0) {
-        return { min: baseMin, max: baseMax };
-      }
-
-      const totalWidth = timeline.clientWidth * zoom;
-      if (totalWidth <= 0) {
-        return { min: baseMin, max: baseMax };
-      }
-
-      const timeToPosition = (time: number) => {
-        if (timeRange === 0) {
-          return totalWidth / 2;
-        }
-
-        const timePercent = (time - minTime) / timeRange;
-        return timePercent * totalWidth;
-      };
-
-      const startPosition = timeToPosition(firstEntryTime);
-      const endPosition = timeToPosition(lastEntryTime);
-
-      const minBound = Math.min(baseMax, Math.max(baseMin, startPosition - PAN_PADDING));
-      const desiredMax = endPosition + PAN_PADDING - timeline.clientWidth;
-      const maxBound = Math.min(baseMax, Math.max(minBound, desiredMax));
-
-      return { min: minBound, max: maxBound };
+      return { min: baseMin, max: baseMax };
     },
-    [firstEntryTime, lastEntryTime, minTime, timeRange, zoom]
+    []
   );
 
   const clampScrollLeft = useCallback(
