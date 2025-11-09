@@ -1,13 +1,11 @@
 
-'use server';
-
 import type { LogEntry, EventLevel } from './types';
 
 // New function to handle block-based apt-history.log
 const parseAptHistoryLog = (fileContent: string, filename: string): Omit<LogEntry, 'id'>[] => {
     const entries: Omit<LogEntry, 'id'>[] = [];
     // Regex to capture each block from Start-Date to End-Date
-    const blockRegex = /Start-Date: ([\d\s:-]+)\nCommandline: ([^\n]+)\n((?:Upgrade|Install|Remove):[^\n]+(?:\n\s+.[^\n]+)*)\nEnd-Date: ([\d\s:-]+)/g;
+    const blockRegex = /Start-Date: ([\d\s:-]+)\r?\nCommandline: ([^\n\r]+)\r?\n((?:Upgrade|Install|Remove):[^\n\r]+(?:\r?\n\s+.[^\n\r]+)*)\r?\nEnd-Date: ([\d\s:-]+)/g;
 
     let match;
     while ((match = blockRegex.exec(fileContent)) !== null) {
@@ -249,9 +247,9 @@ export async function parseLogFile(fileContent: string, filename: string): Promi
     if (!fileContent.trim()) {
         throw new Error("The uploaded file is empty or contains only whitespace.");
     }
-    
+
     // First, check for special multi-line formats like apt-history.log
-    if (filename.includes('apt-history.log') || fileContent.includes('Start-Date:')) {
+    if (filename.toLowerCase().includes('apt-history.log') || fileContent.includes('Start-Date:')) {
         const aptEntries = parseAptHistoryLog(fileContent, filename);
         if (aptEntries.length > 0) {
             return aptEntries;

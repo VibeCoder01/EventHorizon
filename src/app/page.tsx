@@ -159,7 +159,8 @@ export default function Home() {
     const url = URL.createObjectURL(sessionBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `event-horizon-session-${new Date().toISOString()}.json`;
+    const timestamp = new Date().toISOString().replace(/[:]/g, "-");
+    a.download = `event-horizon-session-${timestamp}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
