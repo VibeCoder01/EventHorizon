@@ -118,44 +118,38 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const timeRange = maxTime - minTime;
   
   const getPosition = useCallback((timestamp: Date | number) => {
-    if (timeRange === 0) return 0;
+    if (timeRange === 0) return 0.5; // Center if no range
     const time = timestamp instanceof Date ? timestamp.getTime() : timestamp;
-    const timePosition = ((time - minTime) / timeRange);
-    
     const clientWidth = timelineRef.current?.clientWidth ?? 0;
+    const timePercent = (time - minTime) / timeRange;
     const totalWidth = clientWidth * zoom;
-    
-    // We give a half-viewport padding on each side to allow first/last events to be centered
-    const paddedWidth = totalWidth + clientWidth;
-    
-    return (timePosition * totalWidth) + (clientWidth / 2);
+
+    return timePercent * totalWidth;
   }, [minTime, timeRange, zoom]);
 
   const updateVisibleEntries = useCallback(() => {
-    if (!timelineRef.current) return;
+    if (!timelineRef.current || timeRange <= 0) return;
     
     const { scrollLeft, clientWidth } = timelineRef.current;
     
     // Calculate visible time range based on scroll position
     const totalWidth = clientWidth * zoom;
-    const startOffset = scrollLeft - (clientWidth / 2);
-    const endOffset = scrollLeft + clientWidth + (clientWidth / 2);
-
-    const startPercent = Math.max(0, startOffset / totalWidth);
-    const endPercent = Math.min(1, endOffset / totalWidth);
     
+    const startPercent = scrollLeft / totalWidth;
+    const endPercent = (scrollLeft + clientWidth) / totalWidth;
+
     const visibleStartTime = minTime + (startPercent * timeRange);
     const visibleEndTime = minTime + (endPercent * timeRange);
     setVisibleTimeRange({ start: visibleStartTime, end: visibleEndTime });
 
     // Culling logic: only render entries that are within the viewport + a buffer
-    const buffer = clientWidth * 0.5;
+    const buffer = clientWidth * 0.5; // 50% buffer on each side
     const viewStart = scrollLeft - buffer;
     const viewEnd = scrollLeft + clientWidth + buffer;
 
     const visible = entries.filter(entry => {
-      const position = getPosition(entry.timestamp);
-      return position >= viewStart && position <= viewEnd;
+        const position = getPosition(entry.timestamp);
+        return position >= viewStart && position <= viewEnd;
     });
 
     setVisibleEntries(visible);
@@ -201,9 +195,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const viewWidth = timeline.clientWidth;
     
     const pointInTimeline = oldScrollLeft + viewWidth * focusPointPercent;
-    const timePercent = (pointInTimeline - viewWidth/2) / (viewWidth * oldZoom);
+    const timePercent = pointInTimeline / (viewWidth * oldZoom);
     
-    const newScrollLeft = timePercent * (viewWidth * newZoom) - viewWidth * focusPointPercent + viewWidth/2;
+    const newScrollLeft = timePercent * (viewWidth * newZoom) - viewWidth * focusPointPercent;
 
     onStateChange({ zoom: newZoom, scroll: newScrollLeft });
     
@@ -289,12 +283,12 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             const totalWidth = clientWidth * zoom;
 
             const selectionStartOnCanvas = currentScrollLeft + startX;
-            const selectionStartPercent = (selectionStartOnCanvas - clientWidth/2) / totalWidth;
+            const selectionStartPercent = selectionStartOnCanvas / totalWidth;
 
             const newZoom = Math.min(MAX_ZOOM, zoom * (rect.width / selectionWidth));
             
             const selectionWidthInNewZoom = selectionWidth * (newZoom / zoom);
-            const selectionStartInNewZoom = (selectionStartPercent * (clientWidth * newZoom)) + clientWidth/2;
+            const selectionStartInNewZoom = (selectionStartPercent * (clientWidth * newZoom));
             const newScroll = selectionStartInNewZoom + (selectionWidthInNewZoom / 2) - (clientWidth / 2);
             
             onStateChange({ zoom: newZoom, scroll: newScroll });
@@ -495,7 +489,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         <TooltipProvider>
             <div 
               ref={timelineRef}
-              className="w-full h-full relative cursor-grab overflow-x-auto"
+              className="w-full h-full relative cursor-grab overflow-hidden"
               onWheel={handleWheel}
               onMouseDown={handleMouseDown}
               onMouseUp={handleMouseUp}
@@ -506,7 +500,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                 <div 
                     className="relative h-full"
                     style={{ 
-                      width: timelineRef.current ? `${(timelineRef.current.clientWidth * zoom) + timelineRef.current.clientWidth}px` : '200%',
+                      width: timelineRef.current ? `${timelineRef.current.clientWidth * zoom}px` : '100%',
                     }}
                 >
                     {/* Vertical Grid Lines */}
@@ -568,34 +562,34 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                                     )} style={{ width: '2px', height: '2px' }}/>
                                 </div>
                             );
+                        } else {
+                            return (
+                                <Tooltip key={entry.id} delayDuration={100}>
+                                    <TooltipTrigger asChild>
+                                        <div 
+                                            data-event-id={entry.id}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onEventSelect(isSelected ? null : entry.id);
+                                            }}
+                                            className="absolute top-1/2 -translate-x-1/2 cursor-pointer"
+                                            style={style}
+                                        >
+                                            <Icon className={cn(`w-6 h-6 ${color} transition-transform duration-200 hover:scale-150`, {
+                                              "scale-150 drop-shadow-[0_0_12px]": isSelected
+                                            })} 
+                                            style={{'--tw-drop-shadow-color': 'hsl(var(--primary))'} as React.CSSProperties}/>
+                                            {isSelected && <LocateFixed className="absolute -top-1 -right-1 w-4 h-4 text-primary bg-background rounded-full" />}
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="bg-popover text-popover-foreground border-border">
+                                        <div className="font-bold">{entry.level}</div>
+                                        <div className="text-sm text-muted-foreground">{format(new Date(entry.timestamp), "MMM d, yyyy, HH:mm:ss")}</div>
+                                        <p className="max-w-xs text-wrap mt-1">{entry.message}</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            );
                         }
-
-                        return (
-                            <Tooltip key={entry.id} delayDuration={100}>
-                                <TooltipTrigger asChild>
-                                    <div 
-                                        data-event-id={entry.id}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onEventSelect(isSelected ? null : entry.id);
-                                        }}
-                                        className="absolute top-1/2 -translate-x-1/2 cursor-pointer"
-                                        style={style}
-                                    >
-                                        <Icon className={cn(`w-6 h-6 ${color} transition-transform duration-200 hover:scale-150`, {
-                                          "scale-150 drop-shadow-[0_0_12px]": isSelected
-                                        })} 
-                                        style={{'--tw-drop-shadow-color': 'hsl(var(--primary))'} as React.CSSProperties}/>
-                                        {isSelected && <LocateFixed className="absolute -top-1 -right-1 w-4 h-4 text-primary bg-background rounded-full" />}
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-popover text-popover-foreground border-border">
-                                    <div className="font-bold">{entry.level}</div>
-                                    <div className="text-sm text-muted-foreground">{format(new Date(entry.timestamp), "MMM d, yyyy, HH:mm:ss")}</div>
-                                    <p className="max-w-xs text-wrap mt-1">{entry.message}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        )
                     })}
 
                     <div className="absolute bottom-0 left-0 w-full h-8">
