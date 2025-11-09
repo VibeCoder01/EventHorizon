@@ -405,12 +405,11 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     }
     if (isPanning && timelineRef.current) {
         const timeline = timelineRef.current;
-        const maxScrollLeft = timeline.scrollWidth - timeline.clientWidth;
-        const newScrollLeft = Math.max(0, Math.min(maxScrollLeft, timeline.scrollLeft - event.movementX));
+        const newScrollLeft = timeline.scrollLeft - event.movementX;
 
-        timeline.scrollLeft = newScrollLeft;
+        timeline.scrollLeft = clampScrollLeft(newScrollLeft, timeline);
     }
-  }, [isPanning, selectionBox]);
+  }, [isPanning, selectionBox, clampScrollLeft]);
 
   const handleMouseLeave = useCallback(() => {
     setIsPanning(false);
@@ -681,6 +680,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                                         <div className="font-bold">{entry.level}</div>
                                         <div className="text-sm text-muted-foreground">{format(new Date(entry.timestamp), "MMM d, yyyy, HH:mm:ss")}</div>
                                         <p className="max-w-xs text-wrap mt-1">{entry.message}</p>
+
                                     </TooltipContent>
                                 </Tooltip>
                             );
