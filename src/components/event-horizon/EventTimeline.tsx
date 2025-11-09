@@ -224,7 +224,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   );
 
   const applyZoom = useCallback(
-    (newZoom: number, focusPointPercent: number) => {
+    (newZoom: number, focusPointPercent: number, center: boolean = false) => {
       if (!timelineRef.current) return;
 
       const timeline = timelineRef.current;
@@ -234,8 +234,15 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 
       const pointInTimeline = oldScrollLeft + viewWidth * focusPointPercent;
       const timePercent = timeRange === 0 ? 0 : pointInTimeline / (viewWidth * oldZoom);
+      const totalWidth = viewWidth * newZoom;
 
-      const newScrollLeft = timePercent * (viewWidth * newZoom) - viewWidth * focusPointPercent;
+      let newScrollLeft: number;
+      if (center) {
+        newScrollLeft = timePercent * totalWidth - viewWidth / 2;
+      } else {
+        newScrollLeft = timePercent * totalWidth - viewWidth * focusPointPercent;
+      }
+      
       const clampedScrollLeft = clampScrollLeft(newScrollLeft, timeline);
 
       onStateChange({ zoom: newZoom, scroll: clampedScrollLeft });
@@ -407,7 +414,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     const newZoom = Math.min(MAX_ZOOM, zoom * 2);
     const rect = timelineRef.current.getBoundingClientRect();
     const focusPercent = (event.clientX - rect.left) / rect.width;
-    applyZoom(newZoom, focusPercent);
+    applyZoom(newZoom, focusPercent, true);
   }, [zoom, applyZoom]);
   
   const handleResetZoom = () => {
@@ -689,3 +696,4 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
+
