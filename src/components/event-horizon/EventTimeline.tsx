@@ -48,6 +48,7 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 1024;
 const ZOOM_FACTOR = 2;
 const SLIDER_RANGE = [1, 10];
+const PAN_PADDING = 40;
 
 // Convert a linear slider value to a logarithmic zoom level
 const sliderToZoom = (value: number) => {
@@ -116,6 +117,19 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   }, [allEntries]);
 
   const timeRange = maxTime - minTime;
+
+  const { firstEntryTime, lastEntryTime } = useMemo(() => {
+    const relevantEntries = entries.length > 0 ? entries : allEntries;
+    if (relevantEntries.length === 0) {
+      return { firstEntryTime: minTime, lastEntryTime: maxTime };
+    }
+
+    const times = relevantEntries.map((entry) => new Date(entry.timestamp).getTime());
+    return {
+      firstEntryTime: Math.min(...times),
+      lastEntryTime: Math.max(...times),
+    };
+  }, [entries, allEntries, minTime, maxTime]);
   
   const getPosition = useCallback((timestamp: Date | number) => {
     if (timeRange === 0) return 0.5; // Center if no range
@@ -163,17 +177,93 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     animationFrameRef.current = requestAnimationFrame(updateVisibleEntries);
   }, [updateVisibleEntries]);
 
+  const getScrollBounds = useCallback(
+    (timeline: HTMLDivElement) => {
+      const baseMin = 0;
+      const baseMax = Math.max(0, timeline.scrollWidth - timeline.clientWidth);
+
+      if (timeRange <= 0) {
+        return { min: baseMin, max: baseMax };
+      }
+
+      const totalWidth = timeline.clientWidth * zoom;
+      if (totalWidth <= 0) {
+        return { min: baseMin, max: baseMax };
+      }
+
+      const timeToPosition = (time: number) => {
+        if (timeRange === 0) {
+          return totalWidth / 2;
+        }
+
+        const timePercent = (time - minTime) / timeRange;
+        return timePercent * totalWidth;
+      };
+
+      const startPosition = timeToPosition(firstEntryTime);
+      const endPosition = timeToPosition(lastEntryTime);
+
+      const minBound = Math.min(baseMax, Math.max(baseMin, startPosition - PAN_PADDING));
+      const desiredMax = endPosition + PAN_PADDING - timeline.clientWidth;
+      const maxBound = Math.min(baseMax, Math.max(minBound, desiredMax));
+
+      return { min: minBound, max: maxBound };
+    },
+    [firstEntryTime, lastEntryTime, minTime, timeRange, zoom]
+  );
+
+  const clampScrollLeft = useCallback(
+    (value: number, element?: HTMLDivElement | null) => {
+      const timeline = element ?? timelineRef.current;
+      if (!timeline) return value;
+
+      const { min, max } = getScrollBounds(timeline);
+      return Math.max(min, Math.min(value, max));
+    },
+    [getScrollBounds]
+  );
+
+  const applyZoom = useCallback(
+    (newZoom: number, focusPointPercent: number) => {
+      if (!timelineRef.current) return;
+
+      const timeline = timelineRef.current;
+      const oldZoom = zoom;
+      const oldScrollLeft = timeline.scrollLeft;
+      const viewWidth = timeline.clientWidth;
+
+      const pointInTimeline = oldScrollLeft + viewWidth * focusPointPercent;
+      const timePercent = timeRange === 0 ? 0 : pointInTimeline / (viewWidth * oldZoom);
+
+      const newScrollLeft = timePercent * (viewWidth * newZoom) - viewWidth * focusPointPercent;
+      const clampedScrollLeft = clampScrollLeft(newScrollLeft, timeline);
+
+      onStateChange({ zoom: newZoom, scroll: clampedScrollLeft });
+
+      requestAnimationFrame(() => {
+        if (timelineRef.current) {
+          timelineRef.current.scrollLeft = clampedScrollLeft;
+        }
+      });
+    },
+    [clampScrollLeft, onStateChange, timeRange, zoom]
+  );
+
   useEffect(() => {
     requestUpdate();
-    
+
     const timelineEl = timelineRef.current;
-    
+
     const handleScroll = () => {
       requestUpdate();
-      if(timelineEl) {
-        onStateChange({ zoom: zoom, scroll: timelineEl.scrollLeft });
+      if (timelineEl) {
+        const clampedScroll = clampScrollLeft(timelineEl.scrollLeft, timelineEl);
+        if (clampedScroll !== timelineEl.scrollLeft) {
+          timelineEl.scrollLeft = clampedScroll;
+        }
+        onStateChange({ zoom: zoom, scroll: clampedScroll });
       }
-    }
+    };
 
     if (timelineEl) {
         timelineEl.addEventListener('scroll', handleScroll, { passive: true });
@@ -184,36 +274,17 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             }
         };
     }
-  }, [requestUpdate, entries, zoom, onStateChange]);
-
-  const applyZoom = useCallback((newZoom: number, focusPointPercent: number) => {
-    if (!timelineRef.current) return;
-
-    const timeline = timelineRef.current;
-    const oldZoom = zoom;
-    const oldScrollLeft = timeline.scrollLeft;
-    const viewWidth = timeline.clientWidth;
-    
-    const pointInTimeline = oldScrollLeft + viewWidth * focusPointPercent;
-    const timePercent = pointInTimeline / (viewWidth * oldZoom);
-    
-    const newScrollLeft = timePercent * (viewWidth * newZoom) - viewWidth * focusPointPercent;
-
-    onStateChange({ zoom: newZoom, scroll: newScrollLeft });
-    
-    requestAnimationFrame(() => {
-        if (timelineRef.current) {
-            timelineRef.current.scrollLeft = newScrollLeft;
-        }
-    });
-  }, [zoom, onStateChange]);
+  }, [clampScrollLeft, onStateChange, requestUpdate, zoom]);
   
   // Effect to synchronize the DOM scroll position with the state
   useEffect(() => {
-    if (timelineRef.current && timelineRef.current.scrollLeft !== scrollPosition) {
-      timelineRef.current.scrollLeft = scrollPosition;
+    if (timelineRef.current) {
+      const clamped = clampScrollLeft(scrollPosition, timelineRef.current);
+      if (timelineRef.current.scrollLeft !== clamped) {
+        timelineRef.current.scrollLeft = clamped;
+      }
     }
-  }, [scrollPosition]);
+  }, [clampScrollLeft, scrollPosition]);
 
   useEffect(() => {
     if (selectedEvent && timelineRef.current && timeRange > 0) {
@@ -223,16 +294,17 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         if (timelineRef.current) {
           const position = getPosition(selectedEvent.timestamp);
           const targetScrollLeft = position - (timelineRef.current.clientWidth / 2);
-          
+          const clampedTarget = clampScrollLeft(targetScrollLeft, timelineRef.current);
+
           if (newZoomLevel !== zoom) {
-            onStateChange({ zoom: newZoomLevel, scroll: targetScrollLeft });
+            onStateChange({ zoom: newZoomLevel, scroll: clampedTarget });
           } else {
-             timelineRef.current.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
+             timelineRef.current.scrollTo({ left: clampedTarget, behavior: 'smooth' });
           }
         }
       });
     }
-  }, [selectedEvent, timeRange, zoom, getPosition, onStateChange]);
+  }, [clampScrollLeft, selectedEvent, timeRange, zoom, getPosition, onStateChange]);
   
   const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
     if (event.ctrlKey || event.metaKey) {
@@ -245,12 +317,12 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             const focusPercent = (event.clientX - rect.left) / rect.width;
             applyZoom(newZoom, focusPercent);
         }
-    } else {
-        if (timelineRef.current) {
-            timelineRef.current.scrollLeft += event.deltaY;
-        }
+    } else if (timelineRef.current) {
+        const timeline = timelineRef.current;
+        const newScroll = timeline.scrollLeft + event.deltaY;
+        timeline.scrollLeft = clampScrollLeft(newScroll, timeline);
     }
-  }, [zoom, applyZoom]);
+  }, [applyZoom, clampScrollLeft, zoom]);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.shiftKey) {
@@ -290,12 +362,13 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             const selectionWidthInNewZoom = selectionWidth * (newZoom / zoom);
             const selectionStartInNewZoom = (selectionStartPercent * (clientWidth * newZoom));
             const newScroll = selectionStartInNewZoom + (selectionWidthInNewZoom / 2) - (clientWidth / 2);
-            
-            onStateChange({ zoom: newZoom, scroll: newScroll });
+            const clampedScroll = clampScrollLeft(newScroll);
+
+            onStateChange({ zoom: newZoom, scroll: clampedScroll });
 
             requestAnimationFrame(() => {
                 if (timelineRef.current) {
-                    timelineRef.current.scrollLeft = newScroll;
+                    timelineRef.current.scrollLeft = clampedScroll;
                 }
             });
         }
@@ -306,7 +379,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
      if(timelineRef.current) {
         timelineRef.current.style.cursor = 'grab';
     }
-  }, [selectionBox, zoom, onStateChange]);
+  }, [clampScrollLeft, onStateChange, selectionBox, zoom]);
 
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (selectionBox) {
@@ -316,11 +389,10 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     if (isPanning && timelineRef.current) {
         const timeline = timelineRef.current;
         const newScrollLeft = timeline.scrollLeft - event.movementX;
-        
-        const maxScrollLeft = timeline.scrollWidth - timeline.clientWidth;
-        timeline.scrollLeft = Math.max(0, Math.min(newScrollLeft, maxScrollLeft));
+
+        timeline.scrollLeft = clampScrollLeft(newScrollLeft, timeline);
     }
-  }, [isPanning, selectionBox]);
+  }, [clampScrollLeft, isPanning, selectionBox]);
 
   const handleMouseLeave = useCallback(() => {
     setIsPanning(false);
@@ -339,7 +411,11 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   }, [zoom, applyZoom]);
   
   const handleResetZoom = () => {
-    onStateChange({ zoom: MIN_ZOOM, scroll: 0 });
+    const clamped = clampScrollLeft(0);
+    onStateChange({ zoom: MIN_ZOOM, scroll: clamped });
+    if (timelineRef.current) {
+      timelineRef.current.scrollLeft = clamped;
+    }
   };
   
   const handleSliderChange = (value: number[]) => {
