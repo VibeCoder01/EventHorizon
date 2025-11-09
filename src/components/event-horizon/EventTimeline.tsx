@@ -298,7 +298,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     if (selectedEvent) {
         setFlashKey(prev => prev + 1);
         if (timelineRef.current && timeRange > 0) {
-            const newZoomLevel = Math.max(zoom, 5); // Ensure a minimum zoom level to see the event clearly
+            const newZoomLevel = MAX_ZOOM;
             const zoomChanged = newZoomLevel !== zoom;
 
             // We need to calculate the target scroll position based on the *new* zoom level.
@@ -312,7 +312,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             // Only update state if something has changed to avoid unnecessary re-renders
             if (zoomChanged || scrollChanged) {
                 onStateChange({ zoom: newZoomLevel, scroll: clampedTarget });
-            } else {
+            } else if (timelineRef.current.scrollLeft !== clampedTarget) {
                  // If state is already correct, but DOM might be out of sync, force a scroll
                 timelineRef.current.scrollTo({
                     left: clampedTarget,
@@ -321,7 +321,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             }
         }
     }
-}, [selectedEvent]); // Only re-run when the selected event changes
+}, [selectedEvent, zoom, scrollPosition, getPosition, clampScrollLeft, onStateChange, timeRange]);
   
   const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
     if (event.ctrlKey || event.metaKey) {
@@ -405,11 +405,12 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     }
     if (isPanning && timelineRef.current) {
         const timeline = timelineRef.current;
-        const newScrollLeft = timeline.scrollLeft - event.movementX;
+        const maxScrollLeft = timeline.scrollWidth - timeline.clientWidth;
+        const newScrollLeft = Math.max(0, Math.min(maxScrollLeft, timeline.scrollLeft - event.movementX));
 
-        timeline.scrollLeft = clampScrollLeft(newScrollLeft, timeline);
+        timeline.scrollLeft = newScrollLeft;
     }
-  }, [clampScrollLeft, isPanning, selectionBox]);
+  }, [isPanning, selectionBox]);
 
   const handleMouseLeave = useCallback(() => {
     setIsPanning(false);
