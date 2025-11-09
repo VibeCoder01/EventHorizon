@@ -47,7 +47,7 @@ const DEBOUNCE_DELAY = 150; // ms
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 1024;
 const ZOOM_FACTOR = 2;
-const SLIDER_RANGE = [1, 1024];
+const SLIDER_RANGE = [1, 10];
 
 // Convert a linear slider value to a logarithmic zoom level
 const sliderToZoom = (value: number) => {
@@ -544,7 +544,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                         };
 
                         if (isHighDensity) {
-                            return (
+                           return (
                                 <div
                                     key={entry.id}
                                     data-event-id={entry.id}
@@ -613,3 +613,5 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
+
+    
