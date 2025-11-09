@@ -391,11 +391,12 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
             
             const newTotalWidth = clientWidth * newZoom;
             
-            // The new pixel position of the start of the selection
-            const newStartPoint = startTimePercent * newTotalWidth;
+            const selectionCenterPercent = startTimePercent +
+                (selectionWidth / 2) / (clientWidth * zoom);
 
-            // To center, we want to scroll to the start of the selection
-            const newScrollLeft = newStartPoint;
+            const newCenterPoint = selectionCenterPercent * newTotalWidth;
+
+            const newScrollLeft = newCenterPoint - (clientWidth / 2);
             
             const clampedScrollLeft = clampScrollLeft(newScrollLeft, timeline);
 
