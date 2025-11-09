@@ -104,6 +104,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const [visibleEntries, setVisibleEntries] = useState<LogEntry[]>([]);
   const [visibleTimeRange, setVisibleTimeRange] = useState({ start: 0, end: 0 });
   const animationFrameRef = useRef<number>();
+  const [flashKey, setFlashKey] = useState(0);
 
   const { minTime, maxTime } = useMemo(() => {
     if (allEntries.length === 0) {
@@ -294,24 +295,32 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   }, [clampScrollLeft, scrollPosition]);
 
   useEffect(() => {
-    if (selectedEvent && timelineRef.current && timeRange > 0) {
-      const newZoomLevel = Math.max(zoom, 5); 
+    if (selectedEvent) {
+      setFlashKey(prev => prev + 1); // Trigger re-render to restart animation
+      if (timelineRef.current && timeRange > 0) {
+        const newZoomLevel = Math.max(zoom, 5);
+        requestAnimationFrame(() => {
+          if (timelineRef.current) {
+            const position = getPosition(selectedEvent.timestamp);
+            const targetScrollLeft = position - timelineRef.current.clientWidth / 2;
+            const clampedTarget = clampScrollLeft(targetScrollLeft, timelineRef.current);
 
-      requestAnimationFrame(() => {
-        if (timelineRef.current) {
-          const position = getPosition(selectedEvent.timestamp);
-          const targetScrollLeft = position - (timelineRef.current.clientWidth / 2);
-          const clampedTarget = clampScrollLeft(targetScrollLeft, timelineRef.current);
+            const zoomChanged = newZoomLevel !== zoom;
+            const scrollChanged = Math.abs(clampedTarget - scrollPosition) > 1;
 
-          if (newZoomLevel !== zoom) {
-            onStateChange({ zoom: newZoomLevel, scroll: clampedTarget });
-          } else {
-             timelineRef.current.scrollTo({ left: clampedTarget, behavior: 'smooth' });
+            if (zoomChanged || scrollChanged) {
+              onStateChange({ zoom: newZoomLevel, scroll: clampedTarget });
+            } else {
+              timelineRef.current.scrollTo({
+                left: clampedTarget,
+                behavior: 'smooth',
+              });
+            }
           }
-        }
-      });
+        });
+      }
     }
-  }, [clampScrollLeft, selectedEvent, timeRange, zoom, getPosition, onStateChange]);
+  }, [selectedEvent, timeRange]);
   
   const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
     if (event.ctrlKey || event.metaKey) {
@@ -650,6 +659,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                                 <Tooltip key={entry.id} delayDuration={100}>
                                     <TooltipTrigger asChild>
                                         <div 
+                                            key={flashKey}
                                             data-event-id={entry.id}
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -659,7 +669,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                                             style={style}
                                         >
                                             <Icon className={cn(`w-6 h-6 ${color} transition-transform duration-200 hover:scale-150`, {
-                                              "scale-150 drop-shadow-[0_0_12px]": isSelected
+                                              "scale-150 animate-flash-glow drop-shadow-[0_0_12px]": isSelected
                                             })} 
                                             style={{'--tw-drop-shadow-color': 'hsl(var(--primary))'} as React.CSSProperties}/>
                                             {isSelected && <LocateFixed className="absolute -top-1 -right-1 w-4 h-4 text-primary bg-background rounded-full" />}
@@ -675,18 +685,16 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                         }
                     })}
 
-                    <div className="absolute bottom-0 left-0 w-full h-8">
-                        {timeTicks.map(tick => (
-                             <div key={`tick-${tick.time}`} className="absolute h-full top-0" style={{ left: `${getPosition(tick.time)}px`}}>
-                                <div className={cn("w-px bg-primary/20", tick.isMajor ? "h-3" : "h-2")}></div>
-                                {tick.isMajor && tick.label && (
-                                    <div className="absolute top-4 -translate-x-1/2 text-xs text-muted-foreground">
-                                        {tick.label}
-                                    </div>
-                                )}
-                            </div>
-                         ))}
-                    </div>
+                    {timeTicks.map(tick => (
+                         <div key={`tick-${tick.time}`} className="absolute h-full top-0" style={{ left: `${getPosition(tick.time)}px`}}>
+                            <div className={cn("w-px bg-primary/20", tick.isMajor ? "h-3" : "h-2")}></div>
+                            {tick.isMajor && tick.label && (
+                                <div className="absolute top-4 -translate-x-1/2 text-xs text-muted-foreground">
+                                    {tick.label}
+                                </div>
+                            )}
+                        </div>
+                     ))}
                 </div>
             </div>
         </TooltipProvider>
@@ -696,4 +704,3 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
-

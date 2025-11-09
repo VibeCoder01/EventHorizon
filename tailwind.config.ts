@@ -88,10 +88,15 @@ export default {
             height: '0',
           },
         },
+        'flash-glow': {
+          '0%, 100%': { transform: 'scale(1.5)', filter: 'drop-shadow(0 0 6px hsl(var(--primary)))' },
+          '50%': { transform: 'scale(1.7)',  filter: 'drop-shadow(0 0 16px hsl(var(--primary)))' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        'flash-glow': 'flash-glow 0.7s ease-in-out 2',
       },
     },
   },
