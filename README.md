@@ -4,14 +4,14 @@ Event Horizon is a powerful, interactive log analysis tool designed to help you 
 
 ## Features
 
-- **Interactive Timeline:** Visualize log entries over time with dynamic vertical grid lines and time markers. Pan (click & drag), zoom (Ctrl/Cmd + mouse wheel, or use the zoom slider), and double-click to focus on a specific point in time. Use Shift+drag to create a selection box that intelligently zooms and centers the selected region.
+- **Interactive Timeline:** Visualize log entries over time with dynamic vertical grid lines and time markers. Pan (click & drag), zoom (Ctrl/Cmd + mouse wheel, or use the zoom slider), and double-click to center and zoom in on a specific point in time. Use Shift+drag to create a selection box that intelligently zooms and centers the selected region. The current zoom level is displayed for easy reference.
 - **Detailed Event Table:** View all log entries in a filterable, sortable table. Found entries are counted and displayed.
 - **Dynamic Filtering:** Filter events by log level (Error, Warning, Info, etc.), source, and a full-text search on messages. The availability of other filters dynamically updates based on your selections to guide you toward meaningful results.
 - **Multi-File Support:** Upload and analyze multiple log files simultaneously. Sources are automatically grouped by filename in the filter panel for easy identification.
 - **Session Management:** Save your entire session—including all loaded logs, filters, and timeline position—to a JSON file. Load a session later to pick up right where you left off.
 - **Log Parsing:** Automatically parses a variety of common log formats. Unrecognized lines are ingested with a generic 'Information' level and the timestamp of the previous valid entry.
 - **Significant Findings:** Get a quick, at-a-glance overview of the total number of events, warnings, and errors across all loaded files.
-- **Click-to-Focus:** Click an event in the table to immediately center it in the timeline, making it easy to see surrounding activity.
+- **Click-to-Focus:** Click an event in the table to immediately center it in the timeline, zoom to maximum magnification, and flash the event's icon, making it easy to see surrounding activity in high detail.
 
 ## Getting Started
 
