@@ -105,7 +105,7 @@ export function FilterControls({
                             {group.sources.map((source) => {
                                 const isAvailable = availableSources.includes(source);
                                 return (
-                                    <div key={source} className="flex items-center space-x-3">
+                                    <div key={`${group.filename}-${source}`} className="flex items-center space-x-3">
                                         <Checkbox 
                                             id={`source-${group.filename}-${source}`}
                                             checked={filters.sources.includes(source)}
