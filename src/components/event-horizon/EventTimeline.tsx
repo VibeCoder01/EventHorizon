@@ -419,8 +419,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     
     if (dayDiff > 2) {
       return format(date, "MMM d, HH:mm:ss");
+    } else {
+      return format(date, "HH:mm:ss.SSS");
     }
-    return format(date, "HH:mm:ss.SSS");
   };
 
   const isHighDensity = visibleEntries.length > HIGH_DENSITY_THRESHOLD;
