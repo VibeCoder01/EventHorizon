@@ -599,7 +599,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 
                     <div className="absolute bottom-0 left-0 w-full h-8">
                         {timeTicks.map(tick => (
-                             <div key={tick.time} className="absolute h-full top-0" style={{ left: `${getPosition(tick.time)}px`}}>
+                             <div key={`tick-${tick.time}`} className="absolute h-full top-0" style={{ left: `${getPosition(tick.time)}px`}}>
                                 <div className={cn("w-px bg-primary/20", tick.isMajor ? "h-3" : "h-2")}></div>
                                 {tick.isMajor && tick.label && (
                                     <div className="absolute top-4 -translate-x-1/2 text-xs text-muted-foreground">
@@ -620,4 +620,6 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 }
 
     
+    
+
     
