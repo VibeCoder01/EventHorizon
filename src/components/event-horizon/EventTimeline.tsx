@@ -45,8 +45,8 @@ const pseudoRandom = (seed: number) => {
 
 const DEBOUNCE_DELAY = 150; // ms
 const MIN_ZOOM = 1;
-const MAX_ZOOM = 100;
-const SLIDER_RANGE = [1, 100];
+const MAX_ZOOM = 1024;
+const SLIDER_RANGE = [1, 1024];
 
 // Convert a linear slider value to a logarithmic zoom level
 const sliderToZoom = (value: number) => {
@@ -242,7 +242,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
     if (event.ctrlKey || event.metaKey) {
         event.preventDefault();
-        const zoomFactor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
+        const zoomFactor = event.deltaY < 0 ? 2 : 1 / 2;
         const newZoom = Math.max(MIN_ZOOM, Math.min(zoomLevel * zoomFactor, MAX_ZOOM));
 
         if (timelineRef.current) {
@@ -511,7 +511,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                             className="absolute top-0 bottom-0"
                             style={{ left: `${getPosition(tick.time)}px`}}
                         >
-                            <div className={cn("w-px h-full", tick.isMajor ? "bg-primary/20" : "bg-primary/10")}></div>
+                            <div className={cn("w-px h-full", tick.isMajor ? "bg-primary/50" : "bg-primary/20")}></div>
                         </div>
                     ))}
 
@@ -615,4 +615,5 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
   );
 }
 
+    
     
