@@ -618,8 +618,3 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
-
-    
-    
-
-    
