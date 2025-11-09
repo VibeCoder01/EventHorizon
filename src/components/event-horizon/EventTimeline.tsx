@@ -670,10 +670,9 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
                             );
                         } else {
                             return (
-                                <Tooltip key={entry.id} delayDuration={100}>
+                                <Tooltip key={`${entry.id}-${flashKey}`} delayDuration={100}>
                                     <TooltipTrigger asChild>
-                                        <div 
-                                            key={flashKey}
+                                        <div
                                             data-event-id={entry.id}
                                             onClick={(e) => {
                                               e.stopPropagation();
