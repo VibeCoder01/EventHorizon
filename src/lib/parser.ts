@@ -33,23 +33,34 @@ const parseAptHistoryLog = (fileContent: string, filename: string): Omit<LogEntr
 
 
 // Regex patterns for various log formats
-const LOG_PATTERNS = [
+type LogPattern = {
+    name: string;
+    regex: RegExp;
+    map: (parts: RegExpMatchArray) => Partial<Omit<LogEntry, 'id' | 'filename'>>;
+};
+
+const LOG_PATTERNS: LogPattern[] = [
     // 0. Key-Value format (like ollama logs) - check for `level=` first.
     {
         name: 'KEY_VALUE_LOG',
         regex: /time="?([^"\s]+)"?\s+level=([A-Z]+)\s+source="?([^"\s]+)"?\s+msg="([^"]+)"/,
-        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
-            timestamp: new Date(parts[1]),
-            level: mapGenericLevel(parts[2]),
-            source: parts[3],
-            message: `${parts[4]} ${parts.input.substring(parts[0].length)}`.trim()
-        })
+        map: (parts: RegExpMatchArray): Partial<Omit<LogEntry, 'id' | 'filename'>> => {
+            const remainder = (parts.input ?? '').slice(parts[0].length).trim();
+            const message = remainder ? `${parts[4]} ${remainder}`.trim() : parts[4];
+
+            return {
+                timestamp: new Date(parts[1]),
+                level: mapGenericLevel(parts[2]),
+                source: parts[3],
+                message,
+            };
+        }
     },
     // 1. Modern syslog format with PID (e.g., from user-provided snippet)
     {
         name: 'SYSLOG_MODERN_V2',
         regex: /^([0-9T\:\.\-\+Z]+)\s+([\w\.\-]+)\s+([\w\.\-]+(?:\[\d+\])?):\s+(.*)$/,
-        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+        map: (parts: RegExpMatchArray): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[1]),
             level: inferLevelFromMessage(parts[4]),
             source: parts[3].replace(/\[\d+\]/, ''),
@@ -60,7 +71,7 @@ const LOG_PATTERNS = [
     {
         name: 'DPKG_LOG',
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})\s+(.*)$/,
-        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+        map: (parts: RegExpMatchArray): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[1]),
             level: inferLevelFromMessage(parts[2]),
             source: 'dpkg',
@@ -71,7 +82,7 @@ const LOG_PATTERNS = [
     {
         name: 'RFC_5424',
         regex: /^\<(\d+)\>1\s+([0-9T\:\.\-\+Z]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+([\w\.\-]+)\s+(.*)$/,
-        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+        map: (parts: RegExpMatchArray): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[2]),
             level: getLevelFromSyslogPriority(parseInt(parts[1], 10)),
             source: parts[4],
@@ -82,7 +93,7 @@ const LOG_PATTERNS = [
     {
         name: 'RFC_3164',
         regex: /^\<(\d+)\>([A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+([\w\.\-]+)\s+([^:]+):\s+(.*)$/,
-        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+        map: (parts: RegExpMatchArray): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: robustDateParse(parts[2]),
             level: getLevelFromSyslogPriority(parseInt(parts[1], 10)),
             source: parts[4].trim(),
@@ -94,7 +105,7 @@ const LOG_PATTERNS = [
     {
         name: 'WINDOWS_CSV',
         regex: /^"?([^"]+)"?,"?([0-9\/\s:AMP]+)"?,"?([^"]+)"?,"?\d+"?,"?[^"]*"?,"?([^"]+)"?.*$/,
-        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+        map: (parts: RegExpMatchArray): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             level: mapWindowsLevel(parts[1] as EventLevel | 'Information'),
             timestamp: new Date(parts[2]),
             source: parts[3],
@@ -105,7 +116,7 @@ const LOG_PATTERNS = [
     {
         name: 'APP_LOG_1',
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}(?:,\d{3})?)\s+([A-Z]+)\s+\[([^\]]+)\]\s+(.*)$/,
-        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+        map: (parts: RegExpMatchArray): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[1].replace(',', '.')),
             level: mapGenericLevel(parts[2]),
             source: parts[3],
@@ -116,7 +127,7 @@ const LOG_PATTERNS = [
     {
         name: 'ISO_WITH_LEVEL',
         regex: /^([0-9T\:\.\-\+Z]+)\s+\[([A-Z]+)\]\s+(.*)$/,
-        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+        map: (parts: RegExpMatchArray): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[1]),
             level: mapGenericLevel(parts[2]),
             source: 'Application', // Default source
@@ -127,7 +138,7 @@ const LOG_PATTERNS = [
     {
         name: 'FAIL2BAN_LOG',
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d{3})\s+([\w\.-]+)\s+\[\d+\]:\s+([A-Z]+)\s+(.*)$/,
-        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+        map: (parts: RegExpMatchArray): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[1].replace(',', '.')),
             source: parts[2],
             level: mapGenericLevel(parts[3]),
@@ -138,7 +149,7 @@ const LOG_PATTERNS = [
     {
         name: 'CLOUD_INIT_LOG',
         regex: /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d{3})\s+-\s+([\w\.\-]+)\[([A-Z]+)\]:\s+(.*)$/,
-        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+        map: (parts: RegExpMatchArray): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[1].replace(',', '.')),
             source: parts[2],
             level: mapGenericLevel(parts[3]),
@@ -149,7 +160,7 @@ const LOG_PATTERNS = [
     {
         name: 'CLOUD_INIT_OUTPUT',
         regex: /^Cloud-init v\..*? running '([^']*)' at ([\w\s,:]+\s\+\d{4})\./,
-        map: (parts: string[]): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
+        map: (parts: RegExpMatchArray): Partial<Omit<LogEntry, 'id' | 'filename'>> => ({
             timestamp: new Date(parts[2]),
             level: 'Information',
             source: `cloud-init:${parts[1]}`,
