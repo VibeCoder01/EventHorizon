@@ -233,15 +233,21 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
       const oldScrollLeft = timeline.scrollLeft;
       const viewWidth = timeline.clientWidth;
 
+      // The point on the un-zoomed timeline we are focusing on
       const pointInTimeline = oldScrollLeft + viewWidth * focusPointPercent;
+      
+      // What percentage of the total timeline duration this point represents
       const timePercent = timeRange === 0 ? 0.5 : pointInTimeline / (viewWidth * oldZoom);
-      const totalWidth = viewWidth * newZoom;
+      
+      const newTotalWidth = viewWidth * newZoom;
 
       let newScrollLeft: number;
       if (center) {
-        newScrollLeft = timePercent * totalWidth - viewWidth / 2;
+        // To center, the new scroll position should be the point's new location minus half the viewport
+        newScrollLeft = timePercent * newTotalWidth - viewWidth / 2;
       } else {
-        newScrollLeft = timePercent * totalWidth - viewWidth * focusPointPercent;
+        // To keep the point under the cursor, the new scroll should be the point's new location minus the cursor's offset
+        newScrollLeft = timePercent * newTotalWidth - viewWidth * focusPointPercent;
       }
       
       const clampedScrollLeft = clampScrollLeft(newScrollLeft, timeline);
@@ -336,10 +342,11 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         }
     } else if (timelineRef.current) {
         const timeline = timelineRef.current;
-        const newScroll = timeline.scrollLeft + event.deltaY;
-        timeline.scrollLeft = clampScrollLeft(newScroll, timeline);
+        const { min, max } = getScrollBounds(timeline);
+        const newScroll = Math.max(min, Math.min(timeline.scrollLeft + event.deltaY, max));
+        timeline.scrollLeft = newScroll;
     }
-  }, [applyZoom, clampScrollLeft, zoom]);
+  }, [applyZoom, getScrollBounds, zoom]);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.shiftKey) {
@@ -360,19 +367,39 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 
   const handleMouseUp = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (selectionBox && timelineRef.current) {
-        const rect = timelineRef.current.getBoundingClientRect();
-        const startX = Math.min(selectionBox.startX, selectionBox.endX) - rect.left;
-        const endX = Math.max(selectionBox.startX, selectionBox.endX) - rect.left;
-        const selectionWidth = endX - startX;
+        const timeline = timelineRef.current;
+        const rect = timeline.getBoundingClientRect();
+        
+        const selectionStartClientX = Math.min(selectionBox.startX, selectionBox.endX);
+        const selectionEndClientX = Math.max(selectionBox.startX, selectionBox.endX);
+        
+        const selectionStart = selectionStartClientX - rect.left;
+        const selectionEnd = selectionEndClientX - rect.left;
+        const selectionWidth = selectionEnd - selectionStart;
         
         if (selectionWidth > 10) { 
-            const timeline = timelineRef.current;
             const clientWidth = timeline.clientWidth;
-            const newZoom = Math.min(MAX_ZOOM, zoom * (rect.width / selectionWidth));
+
+            // Point on the current zoomed timeline where selection starts
+            const startPointInTimeline = timeline.scrollLeft + selectionStart;
             
-            // Center the zoom on the selection
-            const focusPointPercent = (startX + selectionWidth / 2) / clientWidth;
-            applyZoom(newZoom, focusPointPercent, true);
+            // How far into the total timeline this point is
+            const startTimePercent = timeRange === 0 ? 0 : startPointInTimeline / (clientWidth * zoom);
+            
+            // The zoom level needed to make the selection fill the screen
+            const newZoom = Math.min(MAX_ZOOM, zoom * (clientWidth / selectionWidth));
+            
+            const newTotalWidth = clientWidth * newZoom;
+            
+            // The new pixel position of the start of the selection
+            const newStartPoint = startTimePercent * newTotalWidth;
+
+            // To center, we want to scroll to the start of the selection
+            const newScrollLeft = newStartPoint;
+            
+            const clampedScrollLeft = clampScrollLeft(newScrollLeft, timeline);
+
+            onStateChange({ zoom: newZoom, scroll: clampedScrollLeft });
         }
     }
     
@@ -381,7 +408,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
      if(timelineRef.current) {
         timelineRef.current.style.cursor = 'grab';
     }
-  }, [applyZoom, selectionBox, zoom]);
+  }, [selectionBox, zoom, timeRange, onStateChange, clampScrollLeft]);
 
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (selectionBox) {
@@ -390,11 +417,11 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     }
     if (isPanning && timelineRef.current) {
         const timeline = timelineRef.current;
+        const { min, max } = getScrollBounds(timeline);
         const newScrollLeft = timeline.scrollLeft - event.movementX;
-
-        timeline.scrollLeft = clampScrollLeft(newScrollLeft, timeline);
+        timeline.scrollLeft = Math.max(min, Math.min(newScrollLeft, max));
     }
-  }, [isPanning, selectionBox, clampScrollLeft]);
+  }, [isPanning, selectionBox, getScrollBounds]);
 
   const handleMouseLeave = useCallback(() => {
     setIsPanning(false);
@@ -691,3 +718,5 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     </Card>
   );
 }
+
+    
