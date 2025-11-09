@@ -30,7 +30,8 @@ export const generateMockLogEntries = (count: number): LogEntry[] => {
       timestamp,
       level: levels[Math.floor(Math.random() * levels.length)],
       source: sources[Math.floor(Math.random() * sources.length)],
-      message: messages[Math.floor(Math.random() * messages.length)] + ` (ID: ${Math.random().toString(36).substring(2, 9)})`
+      message: messages[Math.floor(Math.random() * messages.length)] + ` (ID: ${Math.random().toString(36).substring(2, 9)})`,
+      filename: `mock-log-${i % 5}.log`,
     });
   }
   
