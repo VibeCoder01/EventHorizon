@@ -358,33 +358,37 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         const selectionEnd = selectionEndClientX - rect.left;
         const selectionWidth = selectionEnd - selectionStart;
         
-        if (selectionWidth > 10) { 
+        if (selectionWidth > 10) {
             const clientWidth = timeline.clientWidth;
+            const totalWidth = clientWidth * zoom;
 
-            // Point on the current zoomed timeline where selection starts
-            const startPointInTimeline = timeline.scrollLeft + selectionStart;
-            
-            // How far into the total timeline this point is
-            const startTimePercent = timeRange === 0 ? 0 : startPointInTimeline / (clientWidth * zoom);
-            
-            // The zoom level needed to make the selection fill the screen
+            const selectionCenterInTimeline = timeline.scrollLeft + selectionStart + (selectionWidth / 2);
+            const rawCenterPercent = totalWidth === 0 ? 0.5 : selectionCenterInTimeline / totalWidth;
+            const centerPercent = Math.max(0, Math.min(rawCenterPercent, 1));
+
+            const centerTime = timeRange === 0
+                ? minTime + timeRange / 2
+                : minTime + centerPercent * timeRange;
+
             const newZoom = Math.min(MAX_ZOOM, zoom * (clientWidth / selectionWidth));
-            
             const newTotalWidth = clientWidth * newZoom;
-            
-            const selectionCenterPercent = startTimePercent +
-                (selectionWidth / 2) / (clientWidth * zoom);
 
-            const newCenterPoint = selectionCenterPercent * newTotalWidth;
+            const centerPosition = getPosition(centerTime, newZoom);
+            const newScrollLeft = centerPosition - (clientWidth / 2);
 
-            const newScrollLeft = newCenterPoint - (clientWidth / 2);
-            
-            const clampedScrollLeft = clampScrollLeft(newScrollLeft, timeline);
+            const maxScroll = Math.max(0, newTotalWidth - clientWidth);
+            const clampedScrollLeft = Math.max(0, Math.min(newScrollLeft, maxScroll));
 
             onStateChange({ zoom: newZoom, scroll: clampedScrollLeft });
+
+            requestAnimationFrame(() => {
+                if (timelineRef.current) {
+                    timelineRef.current.scrollLeft = clampedScrollLeft;
+                }
+            });
         }
     }
-    
+
     setIsPanning(false);
     setSelectionBox(null);
      if(timelineRef.current) {
