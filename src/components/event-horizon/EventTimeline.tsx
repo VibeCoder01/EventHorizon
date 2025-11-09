@@ -234,7 +234,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
       const viewWidth = timeline.clientWidth;
 
       const pointInTimeline = oldScrollLeft + viewWidth * focusPointPercent;
-      const timePercent = timeRange === 0 ? 0 : pointInTimeline / (viewWidth * oldZoom);
+      const timePercent = timeRange === 0 ? 0.5 : pointInTimeline / (viewWidth * oldZoom);
       const totalWidth = viewWidth * newZoom;
 
       let newScrollLeft: number;
@@ -367,27 +367,12 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
         
         if (selectionWidth > 10) { 
             const timeline = timelineRef.current;
-            const currentScrollLeft = timeline.scrollLeft;
             const clientWidth = timeline.clientWidth;
-            const totalWidth = clientWidth * zoom;
-
-            const selectionStartOnCanvas = currentScrollLeft + startX;
-            const selectionStartPercent = selectionStartOnCanvas / totalWidth;
-
             const newZoom = Math.min(MAX_ZOOM, zoom * (rect.width / selectionWidth));
             
-            const selectionWidthInNewZoom = selectionWidth * (newZoom / zoom);
-            const selectionStartInNewZoom = (selectionStartPercent * (clientWidth * newZoom));
-            const newScroll = selectionStartInNewZoom + (selectionWidthInNewZoom / 2) - (clientWidth / 2);
-            const clampedScroll = clampScrollLeft(newScroll);
-
-            onStateChange({ zoom: newZoom, scroll: clampedScroll });
-
-            requestAnimationFrame(() => {
-                if (timelineRef.current) {
-                    timelineRef.current.scrollLeft = clampedScroll;
-                }
-            });
+            // Center the zoom on the selection
+            const focusPointPercent = (startX + selectionWidth / 2) / clientWidth;
+            applyZoom(newZoom, focusPointPercent, true);
         }
     }
     
@@ -396,7 +381,7 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
      if(timelineRef.current) {
         timelineRef.current.style.cursor = 'grab';
     }
-  }, [clampScrollLeft, onStateChange, selectionBox, zoom]);
+  }, [applyZoom, selectionBox, zoom]);
 
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (selectionBox) {
