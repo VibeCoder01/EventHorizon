@@ -132,12 +132,12 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
     };
   }, [entries, allEntries, minTime, maxTime]);
   
-  const getPosition = useCallback((timestamp: Date | number) => {
+  const getPosition = useCallback((timestamp: Date | number, currentZoom = zoom) => {
     if (timeRange === 0) return 0.5; // Center if no range
     const time = timestamp instanceof Date ? timestamp.getTime() : timestamp;
     const clientWidth = timelineRef.current?.clientWidth ?? 0;
     const timePercent = (time - minTime) / timeRange;
-    const totalWidth = clientWidth * zoom;
+    const totalWidth = clientWidth * currentZoom;
 
     return timePercent * totalWidth;
   }, [minTime, timeRange, zoom]);
@@ -296,31 +296,32 @@ export function EventTimeline({ entries, allEntries, selectedEvent, onEventSelec
 
   useEffect(() => {
     if (selectedEvent) {
-      setFlashKey(prev => prev + 1); // Trigger re-render to restart animation
-      if (timelineRef.current && timeRange > 0) {
-        const newZoomLevel = Math.max(zoom, 5);
-        requestAnimationFrame(() => {
-          if (timelineRef.current) {
-            const position = getPosition(selectedEvent.timestamp);
-            const targetScrollLeft = position - timelineRef.current.clientWidth / 2;
-            const clampedTarget = clampScrollLeft(targetScrollLeft, timelineRef.current);
-
+        setFlashKey(prev => prev + 1);
+        if (timelineRef.current && timeRange > 0) {
+            const newZoomLevel = Math.max(zoom, 5); // Ensure a minimum zoom level to see the event clearly
             const zoomChanged = newZoomLevel !== zoom;
+
+            // We need to calculate the target scroll position based on the *new* zoom level.
+            const position = getPosition(selectedEvent.timestamp, newZoomLevel);
+            const targetScrollLeft = position - (timelineRef.current.clientWidth / 2);
+            
+            const clampedTarget = clampScrollLeft(targetScrollLeft, timelineRef.current);
+            
             const scrollChanged = Math.abs(clampedTarget - scrollPosition) > 1;
 
+            // Only update state if something has changed to avoid unnecessary re-renders
             if (zoomChanged || scrollChanged) {
-              onStateChange({ zoom: newZoomLevel, scroll: clampedTarget });
+                onStateChange({ zoom: newZoomLevel, scroll: clampedTarget });
             } else {
-              timelineRef.current.scrollTo({
-                left: clampedTarget,
-                behavior: 'smooth',
-              });
+                 // If state is already correct, but DOM might be out of sync, force a scroll
+                timelineRef.current.scrollTo({
+                    left: clampedTarget,
+                    behavior: 'smooth'
+                });
             }
-          }
-        });
-      }
+        }
     }
-  }, [selectedEvent, timeRange]);
+}, [selectedEvent]); // Only re-run when the selected event changes
   
   const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
     if (event.ctrlKey || event.metaKey) {
