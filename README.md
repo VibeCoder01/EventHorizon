@@ -1,3 +1,9 @@
+## ----- BUILT FOR THE FUN OF BUILDING      -----
+## ----- KEEP YOUR EXPECTATIONS LOW         ----- 
+## ----- ALL CODE AND PROSE IS AI GENERATED -----
+## ----- USE WITH CAUTION !!!               -----
+##
+
 # Event Horizon - Log Analysis Tool
 
 Event Horizon is a powerful, interactive log analysis tool designed to help you visualize and explore complex log files. Upload one or more log files, and Event Horizon provides an interactive timeline and detailed event table to help you identify patterns, correlate events, and diagnose issues.
